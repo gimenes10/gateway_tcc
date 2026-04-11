@@ -3,262 +3,135 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Estação Meteorológica UNIFESP SJC</title>
+<title>Estação Meteorológica — UNIFESP SJC</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='28' font-size='28'>🌤</text></svg>">
 <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap');
-:root {
-  --bg: #0e1117; --bg2: #161b22; --bg3: #1c2129; --border: #2d333b;
-  --text: #e6edf3; --text2: #8b949e; --text3: #6e7681;
-  --teal: #39d2c0; --blue: #58a6ff; --green: #3fb950; --yellow: #e3b341;
-  --orange: #d29922; --red: #f85149; --purple: #bc8cff;
-}
-* { margin:0; padding:0; box-sizing:border-box; }
-body { background:var(--bg); color:var(--text); font-family:'DM Sans',sans-serif; min-height:100vh; }
-
-header {
-  padding:20px 24px; border-bottom:1px solid var(--border);
-  background:linear-gradient(180deg,var(--bg2),var(--bg));
-  display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;
-}
-.logo h1 { font-family:'JetBrains Mono',monospace; font-size:16px; font-weight:600; color:var(--teal); }
-.logo span { font-size:12px; color:var(--text3); }
-.status { display:flex; align-items:center; gap:8px; font-size:12px; font-family:'JetBrains Mono',monospace; }
-.status-dot { width:8px; height:8px; border-radius:50%; }
-.status-dot.online { background:var(--green); box-shadow:0 0 6px var(--green); }
-.status-dot.offline { background:var(--red); }
-.status-dot.connecting { background:var(--yellow); animation:pulse 1s infinite; }
-@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
-
-.grid {
-  display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr));
-  gap:16px; padding:20px 24px; max-width:1200px; margin:0 auto;
-}
-.card {
-  background:var(--bg2); border:1px solid var(--border); border-radius:12px;
-  padding:18px 20px; transition:border-color .2s;
-}
-.card:hover { border-color:var(--text3); }
-.card-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
-.card-title { font-size:11px; font-family:'JetBrains Mono',monospace; color:var(--text3); text-transform:uppercase; letter-spacing:.5px; }
-.card-icon { font-size:18px; }
-.card-value { font-family:'JetBrains Mono',monospace; font-size:32px; font-weight:700; line-height:1; }
-.card-unit { font-size:14px; font-weight:400; color:var(--text2); margin-left:4px; }
-.card-sub { font-size:12px; color:var(--text3); margin-top:8px; font-family:'JetBrains Mono',monospace; }
-.card-row { display:flex; gap:16px; margin-top:10px; }
-.card-row-item { flex:1; }
-.card-row-label { font-size:10px; color:var(--text3); font-family:'JetBrains Mono',monospace; text-transform:uppercase; }
-.card-row-value { font-size:18px; font-family:'JetBrains Mono',monospace; font-weight:600; margin-top:2px; }
-
-.color-teal { color:var(--teal); } .color-blue { color:var(--blue); }
-.color-green { color:var(--green); } .color-yellow { color:var(--yellow); }
-.color-orange { color:var(--orange); } .color-red { color:var(--red); }
-.color-purple { color:var(--purple); }
-
-.rain-badge {
-  display:inline-block; padding:4px 12px; border-radius:20px;
-  font-size:13px; font-family:'JetBrains Mono',monospace; font-weight:600;
-}
-.rain-dry { background:#1a2e1a; color:var(--green); }
-.rain-wet { background:#2e1a1a; color:var(--red); }
-
-footer {
-  text-align:center; padding:20px; font-size:11px; color:var(--text3);
-  font-family:'JetBrains Mono',monospace; border-top:1px solid var(--border);
-}
-
-#config-bar {
-  padding:12px 24px; background:var(--bg3); border-bottom:1px solid var(--border);
-  display:flex; gap:12px; align-items:center; flex-wrap:wrap;
-}
-#config-bar input {
-  background:var(--bg); border:1px solid var(--border); border-radius:6px;
-  padding:6px 10px; color:var(--text); font-family:'JetBrains Mono',monospace; font-size:12px;
-}
-#config-bar input::placeholder { color:var(--text3); }
-#config-bar button {
-  background:var(--teal); color:var(--bg); border:none; border-radius:6px;
-  padding:6px 16px; font-family:'JetBrains Mono',monospace; font-size:12px;
-  font-weight:600; cursor:pointer;
-}
-#config-bar button:hover { opacity:.85; }
-#config-bar label { font-size:11px; color:var(--text3); font-family:'JetBrains Mono',monospace; }
-
-@media (max-width:600px) {
-  .card-value { font-size:24px; }
-  .grid { padding:12px; gap:10px; }
-  header { padding:14px 16px; }
-  #config-bar { padding:10px 12px; }
-  #config-bar input { width:100%; }
-}
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+:root{--bg:#080b12;--bg2:#0f1420;--card:#111827;--border:#1e293b;--border2:#2d3a50;--text:#f1f5f9;--text2:#94a3b8;--text3:#64748b;--accent:#38bdf8;--warm:#fb923c;--green:#4ade80;--blue:#60a5fa;--purple:#a78bfa;--red:#f87171;--yellow:#fbbf24}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:'Space Grotesk',sans-serif;min-height:100vh;overflow-x:hidden}
+.rain-container{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0;display:none}
+.rain-container.active{display:block}
+.raindrop{position:absolute;top:-20px;width:2px;background:linear-gradient(transparent,var(--accent));border-radius:0 0 2px 2px;animation:fall linear infinite;opacity:.4}
+@keyframes fall{to{transform:translateY(110vh)}}
+.sun-container{position:fixed;top:-80px;right:-80px;width:300px;height:300px;pointer-events:none;z-index:0;display:none}
+.sun-container.active{display:block}
+.sun-core{width:120px;height:120px;background:radial-gradient(circle,#fbbf2488,#f9731622,transparent);border-radius:50%;position:absolute;top:90px;left:90px;animation:sp 4s ease-in-out infinite}
+@keyframes sp{0%,100%{transform:scale(1);opacity:.6}50%{transform:scale(1.15);opacity:.9}}
+.sun-ring{position:absolute;top:50px;left:50px;width:200px;height:200px;border:1px solid #fbbf2415;border-radius:50%;animation:sr 20s linear infinite}
+@keyframes sr{to{transform:rotate(360deg)}}
+.page{position:relative;z-index:1;min-height:100vh;display:flex;flex-direction:column}
+header{padding:24px 32px 20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px;border-bottom:1px solid var(--border);background:linear-gradient(180deg,#0f142088,transparent);backdrop-filter:blur(20px)}
+.brand{display:flex;align-items:center;gap:14px}
+.brand-icon{font-size:28px}
+.brand h1{font-size:18px;font-weight:600;letter-spacing:-.3px}
+.brand p{font-size:12px;color:var(--text3);margin-top:2px}
+.conn{display:flex;align-items:center;gap:8px;font-size:12px;font-family:'JetBrains Mono',monospace;color:var(--text3)}
+.dot{width:8px;height:8px;border-radius:50%;transition:.3s}
+.dot.on{background:var(--green);box-shadow:0 0 8px var(--green)}.dot.off{background:var(--red)}.dot.wait{background:var(--yellow);animation:bk 1s infinite}
+@keyframes bk{0%,100%{opacity:1}50%{opacity:.2}}
+.ticker{text-align:center;padding:10px;font-size:11px;color:var(--text3);font-family:'JetBrains Mono',monospace;background:var(--bg2);border-bottom:1px solid var(--border)}
+.hero{text-align:center;padding:48px 24px 36px;background:radial-gradient(ellipse at center top,#1e293b33,transparent 70%)}
+.hero-temp{font-size:96px;font-weight:700;letter-spacing:-4px;line-height:1;background:linear-gradient(135deg,var(--accent),var(--warm));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.hero-temp .u{font-size:36px;font-weight:400;letter-spacing:0}
+.hero-cond{font-size:16px;color:var(--text2);margin-top:8px;display:flex;align-items:center;justify-content:center;gap:8px}
+.hero-cond .e{font-size:24px}
+.hero-meta{display:flex;justify-content:center;gap:32px;margin-top:20px;font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--text3)}
+.hero-meta span{display:flex;align-items:center;gap:6px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;padding:24px 32px;max-width:1100px;margin:0 auto;width:100%}
+.card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:20px 22px;transition:.25s;position:relative;overflow:hidden}
+.card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--accent),transparent);opacity:0;transition:.3s}
+.card:hover{border-color:var(--border2);transform:translateY(-2px);box-shadow:0 8px 32px #00000044}
+.card:hover::before{opacity:1}
+.ch{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.cl{font-size:11px;font-family:'JetBrains Mono',monospace;color:var(--text3);text-transform:uppercase;letter-spacing:.8px}
+.ce{font-size:20px;filter:grayscale(.3)}
+.cv{font-family:'JetBrains Mono',monospace;font-size:36px;font-weight:700;line-height:1}
+.cu{font-size:14px;font-weight:400;color:var(--text3);margin-left:3px}
+.cs{font-size:12px;color:var(--text3);margin-top:8px;font-family:'JetBrains Mono',monospace}
+.cr{display:flex;gap:20px;margin-top:12px}.cri{flex:1}
+.crl{font-size:10px;color:var(--text3);font-family:'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:.5px}
+.crv{font-size:22px;font-family:'JetBrains Mono',monospace;font-weight:600;margin-top:4px}
+.rb{display:inline-flex;align-items:center;gap:8px;padding:8px 20px;border-radius:24px;font-size:15px;font-family:'JetBrains Mono',monospace;font-weight:600;transition:.4s}
+.rb-dry{background:#16291644;border:1px solid #22c55e33;color:var(--green)}
+.rb-wet{background:#2d121288;border:1px solid #f8717166;color:var(--red);animation:rp 1.5s infinite}
+@keyframes rp{0%,100%{box-shadow:0 0 0 0 #f8717133}50%{box-shadow:0 0 20px 4px #f8717122}}
+.sb{display:flex;align-items:flex-end;gap:3px;height:20px}
+.c1{color:var(--accent)}.c2{color:var(--warm)}.c3{color:var(--green)}.c4{color:var(--blue)}.c5{color:var(--purple)}.c6{color:var(--yellow)}.c7{color:var(--red)}
+footer{margin-top:auto;text-align:center;padding:24px;font-size:11px;color:var(--text3);font-family:'JetBrains Mono',monospace;border-top:1px solid var(--border)}
+footer a{color:var(--accent);text-decoration:none}
+.lo{position:fixed;top:0;left:0;width:100%;height:100%;z-index:100;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity .6s}
+.lo.hid{opacity:0;pointer-events:none}
+.lo-sp{width:40px;height:40px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.lo-t{margin-top:16px;font-size:13px;color:var(--text3);font-family:'JetBrains Mono',monospace}
+@media(max-width:640px){.hero-temp{font-size:64px}.hero-meta{gap:16px;font-size:11px;flex-wrap:wrap}.grid{padding:16px;gap:12px}.cv{font-size:28px}header{padding:16px 20px}}
 </style>
 </head>
 <body>
-
+<div class="lo" id="loader"><div class="lo-sp"></div><div class="lo-t" id="lo-msg">Conectando ao broker MQTT...</div></div>
+<div class="rain-container" id="rain-fx"></div>
+<div class="sun-container" id="sun-fx"><div class="sun-core"></div><div class="sun-ring"></div></div>
+<div class="page">
 <header>
-  <div class="logo">
-    <h1>// estacao meteorologica</h1>
-    <span>UNIFESP — ICT São José dos Campos</span>
-  </div>
-  <div class="status">
-    <span class="status-dot offline" id="status-dot"></span>
-    <span id="status-text">Desconectado</span>
-    <span id="last-update" style="font-size:11px;color:var(--text3)"></span>
-  </div>
+<div class="brand"><span class="brand-icon">🌤</span><div><h1>Estação Meteorológica</h1><p>UNIFESP — ICT São José dos Campos</p></div></div>
+<div class="conn"><span class="dot off" id="dot"></span><span id="ct">Conectando...</span></div>
 </header>
-
-<div id="config-bar">
-  <label>Host:</label>
-  <input id="cfg-host" value="9d10239851aa4a5fa45c7a5e8b7bdebd.s1.eu.hivemq.cloud" size="42">
-  <label>Porta:</label>
-  <input id="cfg-port" value="8884" size="5">
-  <label>Usuário:</label>
-  <input id="cfg-user" placeholder="usuario" size="12">
-  <label>Senha:</label>
-  <input id="cfg-pass" type="password" placeholder="senha" size="12">
-  <button onclick="connectMqtt()">Conectar</button>
+<div class="ticker" id="ticker">Aguardando dados do sensor...</div>
+<div class="hero">
+<div class="hero-temp" id="ht">--<span class="u">°C</span></div>
+<div class="hero-cond"><span class="e" id="he">🌡</span><span id="hd">Aguardando leitura...</span></div>
+<div class="hero-meta">
+<span>💧 <span id="mm-h">--%</span></span>
+<span>🌍 <span id="mm-p">-- hPa</span></span>
+<span>☀ <span id="mm-l">-- lux</span></span>
+<span>📡 <span id="mm-r">-- dBm</span></span>
 </div>
-
+</div>
 <div class="grid">
-  <div class="card">
-    <div class="card-header"><span class="card-title">Temperatura</span><span class="card-icon">🌡</span></div>
-    <div class="card-value color-teal" id="v-temp">--<span class="card-unit">°C</span></div>
-    <div class="card-sub" id="v-imu-temp">Sensor interno: --°C</div>
-  </div>
-
-  <div class="card">
-    <div class="card-header"><span class="card-title">Umidade relativa</span><span class="card-icon">💧</span></div>
-    <div class="card-value color-blue" id="v-hum">--<span class="card-unit">%</span></div>
-  </div>
-
-  <div class="card">
-    <div class="card-header"><span class="card-title">Pressão atmosférica</span><span class="card-icon">🔵</span></div>
-    <div class="card-value color-purple" id="v-press">--<span class="card-unit">hPa</span></div>
-  </div>
-
-  <div class="card">
-    <div class="card-header"><span class="card-title">Luminosidade</span><span class="card-icon">☀</span></div>
-    <div class="card-value color-yellow" id="v-lux">--<span class="card-unit">lux</span></div>
-  </div>
-
-  <div class="card">
-    <div class="card-header"><span class="card-title">Qualidade do ar</span><span class="card-icon">🏭</span></div>
-    <div class="card-row">
-      <div class="card-row-item">
-        <div class="card-row-label">CO (MQ-7)</div>
-        <div class="card-row-value color-orange" id="v-co">--</div>
-      </div>
-      <div class="card-row-item">
-        <div class="card-row-label">GLP (MQ-2)</div>
-        <div class="card-row-value color-orange" id="v-gas">--</div>
-      </div>
-    </div>
-    <div class="card-sub"><span id="v-co-v">--</span>V / <span id="v-gas-v">--</span>V</div>
-  </div>
-
-  <div class="card">
-    <div class="card-header"><span class="card-title">Precipitação</span><span class="card-icon">🌧</span></div>
-    <div id="v-rain-badge" class="rain-badge rain-dry">SECO</div>
-    <div class="card-sub" id="v-rain-raw">Raw: -- | Voltage: --V</div>
-  </div>
-
-  <div class="card">
-    <div class="card-header"><span class="card-title">Acelerômetro (g)</span><span class="card-icon">📐</span></div>
-    <div class="card-row">
-      <div class="card-row-item"><div class="card-row-label">X</div><div class="card-row-value color-green" id="v-ax">--</div></div>
-      <div class="card-row-item"><div class="card-row-label">Y</div><div class="card-row-value color-green" id="v-ay">--</div></div>
-      <div class="card-row-item"><div class="card-row-label">Z</div><div class="card-row-value color-green" id="v-az">--</div></div>
-    </div>
-  </div>
-
-  <div class="card">
-    <div class="card-header"><span class="card-title">Sinal LoRa</span><span class="card-icon">📡</span></div>
-    <div class="card-row">
-      <div class="card-row-item"><div class="card-row-label">RSSI</div><div class="card-row-value color-teal" id="v-rssi">--<span class="card-unit">dBm</span></div></div>
-      <div class="card-row-item"><div class="card-row-label">SNR</div><div class="card-row-value color-teal" id="v-snr">--<span class="card-unit">dB</span></div></div>
-    </div>
-  </div>
+<div class="card"><div class="ch"><span class="cl">Umidade relativa</span><span class="ce">💧</span></div><div class="cv c4" id="vh">--<span class="cu">%</span></div><div class="cs">Sensor BME280</div></div>
+<div class="card"><div class="ch"><span class="cl">Pressão atmosférica</span><span class="ce">🌍</span></div><div class="cv c5" id="vp">--<span class="cu">hPa</span></div><div class="cs">Altitude ~560m (SJC)</div></div>
+<div class="card"><div class="ch"><span class="cl">Luminosidade</span><span class="ce">☀</span></div><div class="cv c6" id="vl">--<span class="cu">lux</span></div><div class="cs" id="ld">Sensor BH1750</div></div>
+<div class="card"><div class="ch"><span class="cl">Qualidade do ar</span><span class="ce">🏭</span></div><div class="cr"><div class="cri"><div class="crl">CO (MQ-7)</div><div class="crv c2" id="vc">--</div></div><div class="cri"><div class="crl">GLP (MQ-2)</div><div class="crv c2" id="vg">--</div></div></div><div class="cs"><span id="vcv">--</span>V / <span id="vgv">--</span>V</div></div>
+<div class="card"><div class="ch"><span class="cl">Precipitação</span><span class="ce" id="re">🌤</span></div><div id="rb" class="rb rb-dry">☀ Sem chuva</div><div class="cs" id="rr">Sensor FC-22</div></div>
+<div class="card"><div class="ch"><span class="cl">Link LoRa 915 MHz</span><span class="ce">📡</span></div><div class="cr"><div class="cri"><div class="crl">RSSI</div><div class="crv c1" id="vrs">--<span class="cu">dBm</span></div></div><div class="cri"><div class="crl">SNR</div><div class="crv c1" id="vsn">--<span class="cu">dB</span></div></div><div class="cri"><div class="crl">Sinal</div><div id="sbar" class="sb"></div></div></div><div class="cs" id="pc">Pacotes: 0</div></div>
 </div>
-
-<footer>TCC — Estação Meteorológica IoT Autossuficiente com Comunicação LoRa | UNIFESP ICT SJC | Guilherme Gimenes | 2026</footer>
-
+<footer>TCC — Estação Meteorológica IoT Autossuficiente com Comunicação LoRa<br>Guilherme Gimenes · RA 150053 · UNIFESP ICT SJC · 2026<br><a href="https://github.com/gimenes10/gateway_tcc" target="_blank">github.com/gimenes10/gateway_tcc</a></footer>
+</div>
 <script>
-let client = null;
-const TOPIC = 'estacao/sjc/dados';
-
-function setStatus(s, t) {
-  document.getElementById('status-dot').className = 'status-dot ' + s;
-  document.getElementById('status-text').textContent = t;
-}
-
-function connectMqtt() {
-  const host = document.getElementById('cfg-host').value.trim();
-  const port = document.getElementById('cfg-port').value.trim() || '8884';
-  const user = document.getElementById('cfg-user').value.trim();
-  const pass = document.getElementById('cfg-pass').value.trim();
-  if (!host || !user || !pass) { alert('Preencha todos os campos.'); return; }
-
-  localStorage.setItem('mqtt_cfg', JSON.stringify({host,port,user,pass}));
-
-  if (client) client.end(true);
-  setStatus('connecting', 'Conectando...');
-
-  client = mqtt.connect('wss://' + host + ':' + port + '/mqtt', {
-    username: user, password: pass, protocol: 'wss', reconnectPeriod: 5000,
-  });
-
-  client.on('connect', function() {
-    setStatus('online', 'Conectado');
-    client.subscribe(TOPIC);
-    document.getElementById('config-bar').style.display = 'none';
-  });
-  client.on('message', function(t, m) {
-    try { updateDashboard(JSON.parse(m.toString())); } catch(e) { console.error(e); }
-  });
-  client.on('error', function(e) { setStatus('offline', 'Erro: ' + e.message); });
-  client.on('offline', function() { setStatus('offline', 'Desconectado'); });
-  client.on('reconnect', function() { setStatus('connecting', 'Reconectando...'); });
-}
-
-function updateDashboard(d) {
-  document.getElementById('last-update').textContent =
-    'Atualizado: ' + new Date().toLocaleTimeString('pt-BR');
-
-  document.getElementById('v-temp').innerHTML = d.temperatura.toFixed(1) + '<span class="card-unit">°C</span>';
-  document.getElementById('v-hum').innerHTML = d.umidade.toFixed(0) + '<span class="card-unit">%</span>';
-  document.getElementById('v-press').innerHTML = d.pressao.toFixed(1) + '<span class="card-unit">hPa</span>';
-  document.getElementById('v-lux').innerHTML = d.lux.toFixed(0) + '<span class="card-unit">lux</span>';
-
-  document.getElementById('v-co').textContent = d.mq7_raw;
-  document.getElementById('v-gas').textContent = d.mq2_raw;
-  document.getElementById('v-co-v').textContent = d.mq7_voltage.toFixed(2);
-  document.getElementById('v-gas-v').textContent = d.mq2_voltage.toFixed(2);
-
-  const b = document.getElementById('v-rain-badge');
-  b.textContent = d.chuva_status ? 'CHOVENDO' : 'SECO';
-  b.className = 'rain-badge ' + (d.chuva_status ? 'rain-wet' : 'rain-dry');
-  document.getElementById('v-rain-raw').textContent =
-    'Raw: ' + d.chuva_raw + ' | Voltage: ' + d.chuva_voltage.toFixed(2) + 'V';
-
-  document.getElementById('v-ax').textContent = d.accel_x.toFixed(2);
-  document.getElementById('v-ay').textContent = d.accel_y.toFixed(2);
-  document.getElementById('v-az').textContent = d.accel_z.toFixed(2);
-  document.getElementById('v-imu-temp').textContent = 'Sensor interno: ' + d.imu_temp.toFixed(1) + '°C';
-
-  document.getElementById('v-rssi').innerHTML = d.rssi + '<span class="card-unit">dBm</span>';
-  document.getElementById('v-snr').innerHTML = d.snr + '<span class="card-unit">dB</span>';
-}
-
-window.addEventListener('load', function() {
-  const s = localStorage.getItem('mqtt_cfg');
-  if (s) {
-    const c = JSON.parse(s);
-    document.getElementById('cfg-host').value = c.host || '';
-    document.getElementById('cfg-port').value = c.port || '8884';
-    document.getElementById('cfg-user').value = c.user || '';
-    document.getElementById('cfg-pass').value = c.pass || '';
-  }
-});
+var C='9d10239851aa4a5fa45c7a5e8b7bdebd.s1.eu.hivemq.cloud',P='8884',U='gimten',W='Thiguipapa96@',T='estacao/sjc/dados',n=0;
+function mkRain(c){var e=document.getElementById('rain-fx');e.innerHTML='';for(var i=0;i<c;i++){var d=document.createElement('div');d.className='raindrop';d.style.left=Math.random()*100+'%';d.style.height=(10+Math.random()*20)+'px';d.style.animationDuration=(.4+Math.random()*.6)+'s';d.style.animationDelay=Math.random()*2+'s';d.style.opacity=.1+Math.random()*.4;e.appendChild(d)}}
+mkRain(80);
+function sigBar(r){var e=document.getElementById('sbar'),s=0;if(r>-60)s=5;else if(r>-70)s=4;else if(r>-80)s=3;else if(r>-90)s=2;else if(r>-100)s=1;var h='';for(var i=0;i<5;i++){var ht=4+i*4,a=i<s,c=a?(s>=4?'var(--green)':s>=2?'var(--yellow)':'var(--red)'):'var(--border)';h+='<div style="width:5px;height:'+ht+'px;border-radius:2px;background:'+c+'"></div>'}e.innerHTML=h}
+sigBar(-999);
+function cond(d){if(d.chuva_status)return{e:'🌧',t:'Chovendo',b:'rain'};if(d.lux>10000)return{e:'☀',t:'Sol forte',b:'sun'};if(d.lux>1000)return{e:'🌤',t:'Parcialmente nublado',b:'sun'};if(d.lux>100)return{e:'⛅',t:'Nublado',b:''};if(d.lux>10)return{e:'🌥',t:'Muito nublado',b:''};return{e:'🌙',t:'Noite',b:''}}
+function luxD(l){if(l>50000)return'Luz solar direta';if(l>10000)return'Dia intenso';if(l>1000)return'Dia nublado';if(l>200)return'Bem iluminado';if(l>50)return'Iluminacao ambiente';if(l>10)return'Penumbra';return'Escuro / noite'}
+function upd(d){n++;var now=new Date(),tm=now.toLocaleTimeString('pt-BR'),dt=now.toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long'});
+document.getElementById('ticker').textContent='Ultima atualizacao: '+tm+' \u2014 '+dt+' \u2014 Pacote #'+n;
+document.getElementById('ht').innerHTML=d.temperatura.toFixed(1)+'<span class="u">\u00b0C</span>';
+var cc=cond(d);document.getElementById('he').textContent=cc.e;document.getElementById('hd').textContent=cc.t+' \u00b7 '+d.temperatura.toFixed(0)+'\u00b0C';
+document.getElementById('mm-h').textContent=d.umidade.toFixed(0)+'%';document.getElementById('mm-p').textContent=d.pressao.toFixed(0)+' hPa';document.getElementById('mm-l').textContent=d.lux.toFixed(0)+' lux';document.getElementById('mm-r').textContent=d.rssi+' dBm';
+document.getElementById('vh').innerHTML=d.umidade.toFixed(1)+'<span class="cu">%</span>';
+document.getElementById('vp').innerHTML=d.pressao.toFixed(1)+'<span class="cu">hPa</span>';
+document.getElementById('vl').innerHTML=d.lux.toFixed(0)+'<span class="cu">lux</span>';
+document.getElementById('ld').textContent=luxD(d.lux);
+document.getElementById('vc').textContent=d.mq7_raw;document.getElementById('vg').textContent=d.mq2_raw;
+document.getElementById('vcv').textContent=d.mq7_voltage.toFixed(2);document.getElementById('vgv').textContent=d.mq2_voltage.toFixed(2);
+var rb=document.getElementById('rb'),re=document.getElementById('re');
+if(d.chuva_status){rb.innerHTML='🌧 Chovendo';rb.className='rb rb-wet';re.textContent='🌧'}else{rb.innerHTML='☀ Sem chuva';rb.className='rb rb-dry';re.textContent='🌤'}
+document.getElementById('rr').textContent='Raw: '+d.chuva_raw+' | '+d.chuva_voltage.toFixed(2)+'V';
+document.getElementById('rain-fx').classList.toggle('active',cc.b==='rain');document.getElementById('sun-fx').classList.toggle('active',cc.b==='sun');
+document.getElementById('vrs').innerHTML=d.rssi+'<span class="cu">dBm</span>';document.getElementById('vsn').innerHTML=d.snr+'<span class="cu">dB</span>';
+document.getElementById('pc').textContent='Pacotes recebidos: '+n;sigBar(d.rssi)}
+function setC(s,t){document.getElementById('dot').className='dot '+s;document.getElementById('ct').textContent=t}
+var cl=mqtt.connect('wss://'+C+':'+P+'/mqtt',{username:U,password:W,protocol:'wss',reconnectPeriod:5000});
+cl.on('connect',function(){setC('on','Conectado');cl.subscribe(T);document.getElementById('loader').classList.add('hid')});
+cl.on('message',function(t,m){try{upd(JSON.parse(m.toString()))}catch(e){console.error(e)}});
+cl.on('error',function(){setC('off','Erro')});
+cl.on('offline',function(){setC('off','Offline')});
+cl.on('reconnect',function(){setC('wait','Reconectando...')});
+setTimeout(function(){var l=document.getElementById('loader');if(!l.classList.contains('hid')){document.getElementById('lo-msg').textContent='Conectado! Aguardando dados do sensor...'}},5000);
 </script>
 </body>
 </html>
