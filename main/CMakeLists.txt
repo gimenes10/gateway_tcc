@@ -3,5 +3,5 @@ idf_component_register(
         "main.c"
         "gateway_task.c"
     INCLUDE_DIRS "include"
-    REQUIRES board_config drivers
+    REQUIRES board_config drivers net
 )

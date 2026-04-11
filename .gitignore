@@ -6,3 +6,4 @@ dependencies.lock
 .cache/
 *.pyc
 __pycache__/
+components/board_config/include/credentials.h

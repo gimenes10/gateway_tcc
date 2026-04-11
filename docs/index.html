@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Estação Meteorológica UNIFESP SJC</title>
+<script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap');
+:root {
+  --bg: #0e1117; --bg2: #161b22; --bg3: #1c2129; --border: #2d333b;
+  --text: #e6edf3; --text2: #8b949e; --text3: #6e7681;
+  --teal: #39d2c0; --blue: #58a6ff; --green: #3fb950; --yellow: #e3b341;
+  --orange: #d29922; --red: #f85149; --purple: #bc8cff;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:var(--bg); color:var(--text); font-family:'DM Sans',sans-serif; min-height:100vh; }
+
+header {
+  padding:20px 24px; border-bottom:1px solid var(--border);
+  background:linear-gradient(180deg,var(--bg2),var(--bg));
+  display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;
+}
+.logo h1 { font-family:'JetBrains Mono',monospace; font-size:16px; font-weight:600; color:var(--teal); }
+.logo span { font-size:12px; color:var(--text3); }
+.status { display:flex; align-items:center; gap:8px; font-size:12px; font-family:'JetBrains Mono',monospace; }
+.status-dot { width:8px; height:8px; border-radius:50%; }
+.status-dot.online { background:var(--green); box-shadow:0 0 6px var(--green); }
+.status-dot.offline { background:var(--red); }
+.status-dot.connecting { background:var(--yellow); animation:pulse 1s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+.grid {
+  display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr));
+  gap:16px; padding:20px 24px; max-width:1200px; margin:0 auto;
+}
+.card {
+  background:var(--bg2); border:1px solid var(--border); border-radius:12px;
+  padding:18px 20px; transition:border-color .2s;
+}
+.card:hover { border-color:var(--text3); }
+.card-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
+.card-title { font-size:11px; font-family:'JetBrains Mono',monospace; color:var(--text3); text-transform:uppercase; letter-spacing:.5px; }
+.card-icon { font-size:18px; }
+.card-value { font-family:'JetBrains Mono',monospace; font-size:32px; font-weight:700; line-height:1; }
+.card-unit { font-size:14px; font-weight:400; color:var(--text2); margin-left:4px; }
+.card-sub { font-size:12px; color:var(--text3); margin-top:8px; font-family:'JetBrains Mono',monospace; }
+.card-row { display:flex; gap:16px; margin-top:10px; }
+.card-row-item { flex:1; }
+.card-row-label { font-size:10px; color:var(--text3); font-family:'JetBrains Mono',monospace; text-transform:uppercase; }
+.card-row-value { font-size:18px; font-family:'JetBrains Mono',monospace; font-weight:600; margin-top:2px; }
+
+.color-teal { color:var(--teal); } .color-blue { color:var(--blue); }
+.color-green { color:var(--green); } .color-yellow { color:var(--yellow); }
+.color-orange { color:var(--orange); } .color-red { color:var(--red); }
+.color-purple { color:var(--purple); }
+
+.rain-badge {
+  display:inline-block; padding:4px 12px; border-radius:20px;
+  font-size:13px; font-family:'JetBrains Mono',monospace; font-weight:600;
+}
+.rain-dry { background:#1a2e1a; color:var(--green); }
+.rain-wet { background:#2e1a1a; color:var(--red); }
+
+footer {
+  text-align:center; padding:20px; font-size:11px; color:var(--text3);
+  font-family:'JetBrains Mono',monospace; border-top:1px solid var(--border);
+}
+
+#config-bar {
+  padding:12px 24px; background:var(--bg3); border-bottom:1px solid var(--border);
+  display:flex; gap:12px; align-items:center; flex-wrap:wrap;
+}
+#config-bar input {
+  background:var(--bg); border:1px solid var(--border); border-radius:6px;
+  padding:6px 10px; color:var(--text); font-family:'JetBrains Mono',monospace; font-size:12px;
+}
+#config-bar input::placeholder { color:var(--text3); }
+#config-bar button {
+  background:var(--teal); color:var(--bg); border:none; border-radius:6px;
+  padding:6px 16px; font-family:'JetBrains Mono',monospace; font-size:12px;
+  font-weight:600; cursor:pointer;
+}
+#config-bar button:hover { opacity:.85; }
+#config-bar label { font-size:11px; color:var(--text3); font-family:'JetBrains Mono',monospace; }
+
+@media (max-width:600px) {
+  .card-value { font-size:24px; }
+  .grid { padding:12px; gap:10px; }
+  header { padding:14px 16px; }
+  #config-bar { padding:10px 12px; }
+  #config-bar input { width:100%; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <h1>// estacao meteorologica</h1>
+    <span>UNIFESP — ICT São José dos Campos</span>
+  </div>
+  <div class="status">
+    <span class="status-dot offline" id="status-dot"></span>
+    <span id="status-text">Desconectado</span>
+    <span id="last-update" style="font-size:11px;color:var(--text3)"></span>
+  </div>
+</header>
+
+<div id="config-bar">
+  <label>Host:</label>
+  <input id="cfg-host" value="9d10239851aa4a5fa45c7a5e8b7bdebd.s1.eu.hivemq.cloud" size="42">
+  <label>Porta:</label>
+  <input id="cfg-port" value="8884" size="5">
+  <label>Usuário:</label>
+  <input id="cfg-user" placeholder="usuario" size="12">
+  <label>Senha:</label>
+  <input id="cfg-pass" type="password" placeholder="senha" size="12">
+  <button onclick="connectMqtt()">Conectar</button>
+</div>
+
+<div class="grid">
+  <div class="card">
+    <div class="card-header"><span class="card-title">Temperatura</span><span class="card-icon">🌡</span></div>
+    <div class="card-value color-teal" id="v-temp">--<span class="card-unit">°C</span></div>
+    <div class="card-sub" id="v-imu-temp">Sensor interno: --°C</div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><span class="card-title">Umidade relativa</span><span class="card-icon">💧</span></div>
+    <div class="card-value color-blue" id="v-hum">--<span class="card-unit">%</span></div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><span class="card-title">Pressão atmosférica</span><span class="card-icon">🔵</span></div>
+    <div class="card-value color-purple" id="v-press">--<span class="card-unit">hPa</span></div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><span class="card-title">Luminosidade</span><span class="card-icon">☀</span></div>
+    <div class="card-value color-yellow" id="v-lux">--<span class="card-unit">lux</span></div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><span class="card-title">Qualidade do ar</span><span class="card-icon">🏭</span></div>
+    <div class="card-row">
+      <div class="card-row-item">
+        <div class="card-row-label">CO (MQ-7)</div>
+        <div class="card-row-value color-orange" id="v-co">--</div>
+      </div>
+      <div class="card-row-item">
+        <div class="card-row-label">GLP (MQ-2)</div>
+        <div class="card-row-value color-orange" id="v-gas">--</div>
+      </div>
+    </div>
+    <div class="card-sub"><span id="v-co-v">--</span>V / <span id="v-gas-v">--</span>V</div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><span class="card-title">Precipitação</span><span class="card-icon">🌧</span></div>
+    <div id="v-rain-badge" class="rain-badge rain-dry">SECO</div>
+    <div class="card-sub" id="v-rain-raw">Raw: -- | Voltage: --V</div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><span class="card-title">Acelerômetro (g)</span><span class="card-icon">📐</span></div>
+    <div class="card-row">
+      <div class="card-row-item"><div class="card-row-label">X</div><div class="card-row-value color-green" id="v-ax">--</div></div>
+      <div class="card-row-item"><div class="card-row-label">Y</div><div class="card-row-value color-green" id="v-ay">--</div></div>
+      <div class="card-row-item"><div class="card-row-label">Z</div><div class="card-row-value color-green" id="v-az">--</div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><span class="card-title">Sinal LoRa</span><span class="card-icon">📡</span></div>
+    <div class="card-row">
+      <div class="card-row-item"><div class="card-row-label">RSSI</div><div class="card-row-value color-teal" id="v-rssi">--<span class="card-unit">dBm</span></div></div>
+      <div class="card-row-item"><div class="card-row-label">SNR</div><div class="card-row-value color-teal" id="v-snr">--<span class="card-unit">dB</span></div></div>
+    </div>
+  </div>
+</div>
+
+<footer>TCC — Estação Meteorológica IoT Autossuficiente com Comunicação LoRa | UNIFESP ICT SJC | Guilherme Gimenes | 2026</footer>
+
+<script>
+let client = null;
+const TOPIC = 'estacao/sjc/dados';
+
+function setStatus(s, t) {
+  document.getElementById('status-dot').className = 'status-dot ' + s;
+  document.getElementById('status-text').textContent = t;
+}
+
+function connectMqtt() {
+  const host = document.getElementById('cfg-host').value.trim();
+  const port = document.getElementById('cfg-port').value.trim() || '8884';
+  const user = document.getElementById('cfg-user').value.trim();
+  const pass = document.getElementById('cfg-pass').value.trim();
+  if (!host || !user || !pass) { alert('Preencha todos os campos.'); return; }
+
+  localStorage.setItem('mqtt_cfg', JSON.stringify({host,port,user,pass}));
+
+  if (client) client.end(true);
+  setStatus('connecting', 'Conectando...');
+
+  client = mqtt.connect('wss://' + host + ':' + port + '/mqtt', {
+    username: user, password: pass, protocol: 'wss', reconnectPeriod: 5000,
+  });
+
+  client.on('connect', function() {
+    setStatus('online', 'Conectado');
+    client.subscribe(TOPIC);
+    document.getElementById('config-bar').style.display = 'none';
+  });
+  client.on('message', function(t, m) {
+    try { updateDashboard(JSON.parse(m.toString())); } catch(e) { console.error(e); }
+  });
+  client.on('error', function(e) { setStatus('offline', 'Erro: ' + e.message); });
+  client.on('offline', function() { setStatus('offline', 'Desconectado'); });
+  client.on('reconnect', function() { setStatus('connecting', 'Reconectando...'); });
+}
+
+function updateDashboard(d) {
+  document.getElementById('last-update').textContent =
+    'Atualizado: ' + new Date().toLocaleTimeString('pt-BR');
+
+  document.getElementById('v-temp').innerHTML = d.temperatura.toFixed(1) + '<span class="card-unit">°C</span>';
+  document.getElementById('v-hum').innerHTML = d.umidade.toFixed(0) + '<span class="card-unit">%</span>';
+  document.getElementById('v-press').innerHTML = d.pressao.toFixed(1) + '<span class="card-unit">hPa</span>';
+  document.getElementById('v-lux').innerHTML = d.lux.toFixed(0) + '<span class="card-unit">lux</span>';
+
+  document.getElementById('v-co').textContent = d.mq7_raw;
+  document.getElementById('v-gas').textContent = d.mq2_raw;
+  document.getElementById('v-co-v').textContent = d.mq7_voltage.toFixed(2);
+  document.getElementById('v-gas-v').textContent = d.mq2_voltage.toFixed(2);
+
+  const b = document.getElementById('v-rain-badge');
+  b.textContent = d.chuva_status ? 'CHOVENDO' : 'SECO';
+  b.className = 'rain-badge ' + (d.chuva_status ? 'rain-wet' : 'rain-dry');
+  document.getElementById('v-rain-raw').textContent =
+    'Raw: ' + d.chuva_raw + ' | Voltage: ' + d.chuva_voltage.toFixed(2) + 'V';
+
+  document.getElementById('v-ax').textContent = d.accel_x.toFixed(2);
+  document.getElementById('v-ay').textContent = d.accel_y.toFixed(2);
+  document.getElementById('v-az').textContent = d.accel_z.toFixed(2);
+  document.getElementById('v-imu-temp').textContent = 'Sensor interno: ' + d.imu_temp.toFixed(1) + '°C';
+
+  document.getElementById('v-rssi').innerHTML = d.rssi + '<span class="card-unit">dBm</span>';
+  document.getElementById('v-snr').innerHTML = d.snr + '<span class="card-unit">dB</span>';
+}
+
+window.addEventListener('load', function() {
+  const s = localStorage.getItem('mqtt_cfg');
+  if (s) {
+    const c = JSON.parse(s);
+    document.getElementById('cfg-host').value = c.host || '';
+    document.getElementById('cfg-port').value = c.port || '8884';
+    document.getElementById('cfg-user').value = c.user || '';
+    document.getElementById('cfg-pass').value = c.pass || '';
+  }
+});
+</script>
+</body>
+</html>
