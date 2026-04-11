@@ -3,135 +3,220 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Estação Meteorológica — UNIFESP SJC</title>
+<title>Estação Meteorológica — UNIFESP ICT SJC</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='28' font-size='28'>🌤</text></svg>">
 <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
-:root{--bg:#080b12;--bg2:#0f1420;--card:#111827;--border:#1e293b;--border2:#2d3a50;--text:#f1f5f9;--text2:#94a3b8;--text3:#64748b;--accent:#38bdf8;--warm:#fb923c;--green:#4ade80;--blue:#60a5fa;--purple:#a78bfa;--red:#f87171;--yellow:#fbbf24}
+:root{--bg:#060910;--bg2:#0c1018;--bg3:#111827;--card:#0f1629;--card2:#141d33;--border:#1a2340;--border2:#253055;--text:#eef2ff;--text2:#8b9cc8;--text3:#5a6a94;--accent:#38bdf8;--warm:#fb923c;--green:#4ade80;--blue:#60a5fa;--purple:#a78bfa;--red:#f87171;--yellow:#fbbf24;--teal:#2dd4bf}
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:var(--bg);color:var(--text);font-family:'Space Grotesk',sans-serif;min-height:100vh;overflow-x:hidden}
-.rain-container{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0;display:none}
-.rain-container.active{display:block}
-.raindrop{position:absolute;top:-20px;width:2px;background:linear-gradient(transparent,var(--accent));border-radius:0 0 2px 2px;animation:fall linear infinite;opacity:.4}
-@keyframes fall{to{transform:translateY(110vh)}}
-.sun-container{position:fixed;top:-80px;right:-80px;width:300px;height:300px;pointer-events:none;z-index:0;display:none}
-.sun-container.active{display:block}
-.sun-core{width:120px;height:120px;background:radial-gradient(circle,#fbbf2488,#f9731622,transparent);border-radius:50%;position:absolute;top:90px;left:90px;animation:sp 4s ease-in-out infinite}
-@keyframes sp{0%,100%{transform:scale(1);opacity:.6}50%{transform:scale(1.15);opacity:.9}}
-.sun-ring{position:absolute;top:50px;left:50px;width:200px;height:200px;border:1px solid #fbbf2415;border-radius:50%;animation:sr 20s linear infinite}
-@keyframes sr{to{transform:rotate(360deg)}}
+
+/* ===== ANIMATED BG GRADIENT ===== */
+.bg-grad{position:fixed;top:0;left:0;width:100%;height:100%;z-index:0;pointer-events:none;
+background:radial-gradient(ellipse at 20% 0%,#1e3a5f22,transparent 50%),radial-gradient(ellipse at 80% 100%,#3b1f5f18,transparent 50%);
+animation:bgshift 30s ease-in-out infinite alternate}
+@keyframes bgshift{0%{opacity:.6}50%{opacity:1}100%{opacity:.6}}
+
+/* ===== FLOATING PARTICLES ===== */
+.particle{position:fixed;border-radius:50%;pointer-events:none;z-index:0;animation:float linear infinite;opacity:.15}
+@keyframes float{0%{transform:translateY(100vh) scale(0)}50%{opacity:.3}100%{transform:translateY(-10vh) scale(1);opacity:0}}
+
+/* ===== RAIN ===== */
+.rain-box{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0;display:none}
+.rain-box.on{display:block}
+.drop{position:absolute;top:-30px;width:2px;background:linear-gradient(transparent,#38bdf8aa);border-radius:0 0 4px 4px;animation:drp linear infinite}
+@keyframes drp{to{transform:translateY(110vh)}}
+
+/* ===== SUN ===== */
+.sun-box{position:fixed;top:-100px;right:-100px;width:350px;height:350px;pointer-events:none;z-index:0;display:none}
+.sun-box.on{display:block}
+.sun-glow{width:180px;height:180px;background:radial-gradient(circle,#fbbf2455,#f9731611,transparent);border-radius:50%;position:absolute;top:85px;left:85px;animation:sglow 5s ease-in-out infinite}
+@keyframes sglow{0%,100%{transform:scale(1);opacity:.4}50%{transform:scale(1.2);opacity:.7}}
+.sun-ray{position:absolute;top:50%;left:50%;width:300px;height:1px;background:linear-gradient(90deg,#fbbf2422,transparent);transform-origin:0 50%;animation:sray 15s linear infinite}
+@keyframes sray{to{transform:rotate(360deg)}}
+
+/* ===== LAYOUT ===== */
 .page{position:relative;z-index:1;min-height:100vh;display:flex;flex-direction:column}
-header{padding:24px 32px 20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px;border-bottom:1px solid var(--border);background:linear-gradient(180deg,#0f142088,transparent);backdrop-filter:blur(20px)}
-.brand{display:flex;align-items:center;gap:14px}
-.brand-icon{font-size:28px}
-.brand h1{font-size:18px;font-weight:600;letter-spacing:-.3px}
-.brand p{font-size:12px;color:var(--text3);margin-top:2px}
-.conn{display:flex;align-items:center;gap:8px;font-size:12px;font-family:'JetBrains Mono',monospace;color:var(--text3)}
+header{padding:20px 28px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;border-bottom:1px solid var(--border);backdrop-filter:blur(30px);background:#0c101888}
+.brand{display:flex;align-items:center;gap:12px}
+.brand h1{font-size:17px;font-weight:600;letter-spacing:-.3px}
+.brand p{font-size:11px;color:var(--text3);margin-top:1px}
+.conn{display:flex;align-items:center;gap:8px;font-size:11px;font-family:'JetBrains Mono',monospace;color:var(--text3)}
 .dot{width:8px;height:8px;border-radius:50%;transition:.3s}
-.dot.on{background:var(--green);box-shadow:0 0 8px var(--green)}.dot.off{background:var(--red)}.dot.wait{background:var(--yellow);animation:bk 1s infinite}
-@keyframes bk{0%,100%{opacity:1}50%{opacity:.2}}
-.ticker{text-align:center;padding:10px;font-size:11px;color:var(--text3);font-family:'JetBrains Mono',monospace;background:var(--bg2);border-bottom:1px solid var(--border)}
-.hero{text-align:center;padding:48px 24px 36px;background:radial-gradient(ellipse at center top,#1e293b33,transparent 70%)}
-.hero-temp{font-size:96px;font-weight:700;letter-spacing:-4px;line-height:1;background:linear-gradient(135deg,var(--accent),var(--warm));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
-.hero-temp .u{font-size:36px;font-weight:400;letter-spacing:0}
-.hero-cond{font-size:16px;color:var(--text2);margin-top:8px;display:flex;align-items:center;justify-content:center;gap:8px}
-.hero-cond .e{font-size:24px}
-.hero-meta{display:flex;justify-content:center;gap:32px;margin-top:20px;font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--text3)}
-.hero-meta span{display:flex;align-items:center;gap:6px}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;padding:24px 32px;max-width:1100px;margin:0 auto;width:100%}
-.card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:20px 22px;transition:.25s;position:relative;overflow:hidden}
-.card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--accent),transparent);opacity:0;transition:.3s}
+.dot.on{background:var(--green);box-shadow:0 0 10px var(--green)}.dot.off{background:var(--red)}.dot.wait{background:var(--yellow);animation:bk 1s infinite}
+@keyframes bk{0%,100%{opacity:1}50%{opacity:.15}}
+
+.ticker{text-align:center;padding:8px;font-size:11px;color:var(--text3);font-family:'JetBrains Mono',monospace;background:var(--bg2);border-bottom:1px solid var(--border)}
+
+/* ===== HERO ===== */
+.hero{text-align:center;padding:50px 24px 40px;position:relative}
+.hero-weather{font-size:52px;margin-bottom:8px;filter:drop-shadow(0 0 20px #fbbf2433);transition:all .5s}
+.hero-temp{font-size:100px;font-weight:700;letter-spacing:-5px;line-height:1;transition:all .5s}
+.hero-temp .u{font-size:40px;font-weight:400;letter-spacing:0;opacity:.5}
+.hero-desc{font-size:15px;color:var(--text2);margin-top:6px;transition:all .5s}
+.hero-loc{font-size:11px;color:var(--text3);margin-top:12px;font-family:'JetBrains Mono',monospace}
+
+/* ===== METRIC STRIP ===== */
+.strip{display:flex;justify-content:center;gap:4px;padding:16px 24px;flex-wrap:wrap;max-width:800px;margin:0 auto}
+.strip-item{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 20px;text-align:center;flex:1;min-width:120px;transition:all .3s}
+.strip-item:hover{border-color:var(--border2);transform:translateY(-2px);box-shadow:0 6px 24px #00000033}
+.strip-label{font-size:10px;font-family:'JetBrains Mono',monospace;color:var(--text3);text-transform:uppercase;letter-spacing:.6px}
+.strip-val{font-size:24px;font-weight:700;font-family:'JetBrains Mono',monospace;margin-top:4px;transition:all .3s}
+.strip-unit{font-size:11px;font-weight:400;color:var(--text3)}
+.strip-spark{height:20px;margin-top:6px;display:flex;align-items:flex-end;gap:1px}
+.strip-spark div{flex:1;border-radius:1px;transition:height .3s;min-width:2px}
+
+/* ===== CARDS ===== */
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;padding:20px 28px;max-width:1000px;margin:0 auto;width:100%}
+.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px 20px;transition:.25s;position:relative;overflow:hidden}
+.card::after{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--accent),transparent);opacity:0;transition:.3s}
 .card:hover{border-color:var(--border2);transform:translateY(-2px);box-shadow:0 8px 32px #00000044}
-.card:hover::before{opacity:1}
-.ch{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
-.cl{font-size:11px;font-family:'JetBrains Mono',monospace;color:var(--text3);text-transform:uppercase;letter-spacing:.8px}
-.ce{font-size:20px;filter:grayscale(.3)}
-.cv{font-family:'JetBrains Mono',monospace;font-size:36px;font-weight:700;line-height:1}
-.cu{font-size:14px;font-weight:400;color:var(--text3);margin-left:3px}
-.cs{font-size:12px;color:var(--text3);margin-top:8px;font-family:'JetBrains Mono',monospace}
-.cr{display:flex;gap:20px;margin-top:12px}.cri{flex:1}
-.crl{font-size:10px;color:var(--text3);font-family:'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:.5px}
-.crv{font-size:22px;font-family:'JetBrains Mono',monospace;font-weight:600;margin-top:4px}
-.rb{display:inline-flex;align-items:center;gap:8px;padding:8px 20px;border-radius:24px;font-size:15px;font-family:'JetBrains Mono',monospace;font-weight:600;transition:.4s}
-.rb-dry{background:#16291644;border:1px solid #22c55e33;color:var(--green)}
-.rb-wet{background:#2d121288;border:1px solid #f8717166;color:var(--red);animation:rp 1.5s infinite}
-@keyframes rp{0%,100%{box-shadow:0 0 0 0 #f8717133}50%{box-shadow:0 0 20px 4px #f8717122}}
-.sb{display:flex;align-items:flex-end;gap:3px;height:20px}
-.c1{color:var(--accent)}.c2{color:var(--warm)}.c3{color:var(--green)}.c4{color:var(--blue)}.c5{color:var(--purple)}.c6{color:var(--yellow)}.c7{color:var(--red)}
-footer{margin-top:auto;text-align:center;padding:24px;font-size:11px;color:var(--text3);font-family:'JetBrains Mono',monospace;border-top:1px solid var(--border)}
+.card:hover::after{opacity:1}
+.ch{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.cl{font-size:10px;font-family:'JetBrains Mono',monospace;color:var(--text3);text-transform:uppercase;letter-spacing:.7px}
+.ce{font-size:18px}
+.cv{font-family:'JetBrains Mono',monospace;font-size:32px;font-weight:700;line-height:1;transition:all .3s}
+.cu{font-size:13px;font-weight:400;color:var(--text3);margin-left:2px}
+.cs{font-size:11px;color:var(--text3);margin-top:6px;font-family:'JetBrains Mono',monospace}
+.cr{display:flex;gap:16px;margin-top:10px}.cri{flex:1}
+.crl{font-size:9px;color:var(--text3);font-family:'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:.5px}
+.crv{font-size:20px;font-family:'JetBrains Mono',monospace;font-weight:600;margin-top:3px}
+.rb{display:inline-flex;align-items:center;gap:8px;padding:8px 18px;border-radius:24px;font-size:14px;font-family:'JetBrains Mono',monospace;font-weight:600;transition:.4s}
+.rb-dry{background:#0f291a;border:1px solid #22c55e33;color:var(--green)}
+.rb-wet{background:#29101088;border:1px solid #f8717155;color:var(--red);animation:rp 2s infinite}
+@keyframes rp{0%,100%{box-shadow:0 0 0 0 #f8717122}50%{box-shadow:0 0 24px 6px #f8717118}}
+.sb{display:flex;align-items:flex-end;gap:3px;height:18px}
+.c1{color:var(--accent)}.c2{color:var(--warm)}.c3{color:var(--green)}.c4{color:var(--blue)}.c5{color:var(--purple)}.c6{color:var(--yellow)}.c7{color:var(--red)}.c8{color:var(--teal)}
+footer{margin-top:auto;text-align:center;padding:28px 20px;font-size:11px;color:var(--text3);font-family:'JetBrains Mono',monospace;border-top:1px solid var(--border);line-height:1.8}
 footer a{color:var(--accent);text-decoration:none}
-.lo{position:fixed;top:0;left:0;width:100%;height:100%;z-index:100;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity .6s}
+.lo{position:fixed;top:0;left:0;width:100%;height:100%;z-index:100;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity .8s}
 .lo.hid{opacity:0;pointer-events:none}
-.lo-sp{width:40px;height:40px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
+.lo-sp{width:44px;height:44px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 .lo-t{margin-top:16px;font-size:13px;color:var(--text3);font-family:'JetBrains Mono',monospace}
-@media(max-width:640px){.hero-temp{font-size:64px}.hero-meta{gap:16px;font-size:11px;flex-wrap:wrap}.grid{padding:16px;gap:12px}.cv{font-size:28px}header{padding:16px 20px}}
+@media(max-width:640px){.hero-temp{font-size:64px;letter-spacing:-3px}.hero-weather{font-size:36px}.strip{gap:6px;padding:12px}.strip-item{padding:10px 12px;min-width:90px}.strip-val{font-size:18px}.cards{padding:12px;gap:10px}.cv{font-size:26px}header{padding:14px 16px}.hero{padding:30px 16px 24px}}
 </style>
 </head>
 <body>
 <div class="lo" id="loader"><div class="lo-sp"></div><div class="lo-t" id="lo-msg">Conectando ao broker MQTT...</div></div>
-<div class="rain-container" id="rain-fx"></div>
-<div class="sun-container" id="sun-fx"><div class="sun-core"></div><div class="sun-ring"></div></div>
+<div class="bg-grad"></div>
+<div class="rain-box" id="rain-fx"></div>
+<div class="sun-box" id="sun-fx"><div class="sun-glow"></div><div class="sun-ray" style="animation-delay:0s"></div><div class="sun-ray" style="animation-delay:-5s;opacity:.5"></div><div class="sun-ray" style="animation-delay:-10s;opacity:.3"></div></div>
 <div class="page">
 <header>
-<div class="brand"><span class="brand-icon">🌤</span><div><h1>Estação Meteorológica</h1><p>UNIFESP — ICT São José dos Campos</p></div></div>
+<div class="brand"><div><h1>Estação Meteorológica IoT</h1><p>UNIFESP — Instituto de Ciência e Tecnologia</p></div></div>
 <div class="conn"><span class="dot off" id="dot"></span><span id="ct">Conectando...</span></div>
 </header>
 <div class="ticker" id="ticker">Aguardando dados do sensor...</div>
 <div class="hero">
+<div class="hero-weather" id="hw">🌡</div>
 <div class="hero-temp" id="ht">--<span class="u">°C</span></div>
-<div class="hero-cond"><span class="e" id="he">🌡</span><span id="hd">Aguardando leitura...</span></div>
-<div class="hero-meta">
-<span>💧 <span id="mm-h">--%</span></span>
-<span>🌍 <span id="mm-p">-- hPa</span></span>
-<span>☀ <span id="mm-l">-- lux</span></span>
-<span>📡 <span id="mm-r">-- dBm</span></span>
+<div class="hero-desc" id="hd">Aguardando leitura...</div>
+<div class="hero-loc">Av. Cesare Mansueto Giulio Lattes, 1201 — Parque Tecnológico, SJC/SP</div>
 </div>
+
+<div class="strip">
+<div class="strip-item"><div class="strip-label">Umidade</div><div class="strip-val c4" id="sh">--<span class="strip-unit">%</span></div><div class="strip-spark" id="spark-h"></div></div>
+<div class="strip-item"><div class="strip-label">Pressão</div><div class="strip-val c5" id="sp">--<span class="strip-unit">hPa</span></div><div class="strip-spark" id="spark-p"></div></div>
+<div class="strip-item"><div class="strip-label">Luminosidade</div><div class="strip-val c6" id="sl">--<span class="strip-unit">lux</span></div><div class="strip-spark" id="spark-l"></div></div>
+<div class="strip-item"><div class="strip-label">LoRa RSSI</div><div class="strip-val c1" id="sr">--<span class="strip-unit">dBm</span></div><div class="strip-spark" id="spark-r"></div></div>
 </div>
-<div class="grid">
-<div class="card"><div class="ch"><span class="cl">Umidade relativa</span><span class="ce">💧</span></div><div class="cv c4" id="vh">--<span class="cu">%</span></div><div class="cs">Sensor BME280</div></div>
-<div class="card"><div class="ch"><span class="cl">Pressão atmosférica</span><span class="ce">🌍</span></div><div class="cv c5" id="vp">--<span class="cu">hPa</span></div><div class="cs">Altitude ~560m (SJC)</div></div>
-<div class="card"><div class="ch"><span class="cl">Luminosidade</span><span class="ce">☀</span></div><div class="cv c6" id="vl">--<span class="cu">lux</span></div><div class="cs" id="ld">Sensor BH1750</div></div>
+
+<div class="cards">
 <div class="card"><div class="ch"><span class="cl">Qualidade do ar</span><span class="ce">🏭</span></div><div class="cr"><div class="cri"><div class="crl">CO (MQ-7)</div><div class="crv c2" id="vc">--</div></div><div class="cri"><div class="crl">GLP (MQ-2)</div><div class="crv c2" id="vg">--</div></div></div><div class="cs"><span id="vcv">--</span>V / <span id="vgv">--</span>V</div></div>
 <div class="card"><div class="ch"><span class="cl">Precipitação</span><span class="ce" id="re">🌤</span></div><div id="rb" class="rb rb-dry">☀ Sem chuva</div><div class="cs" id="rr">Sensor FC-22</div></div>
-<div class="card"><div class="ch"><span class="cl">Link LoRa 915 MHz</span><span class="ce">📡</span></div><div class="cr"><div class="cri"><div class="crl">RSSI</div><div class="crv c1" id="vrs">--<span class="cu">dBm</span></div></div><div class="cri"><div class="crl">SNR</div><div class="crv c1" id="vsn">--<span class="cu">dB</span></div></div><div class="cri"><div class="crl">Sinal</div><div id="sbar" class="sb"></div></div></div><div class="cs" id="pc">Pacotes: 0</div></div>
+<div class="card"><div class="ch"><span class="cl">Link LoRa 915 MHz</span><span class="ce">📡</span></div><div class="cr"><div class="cri"><div class="crl">RSSI</div><div class="crv c1" id="vrs">--<span class="cu">dBm</span></div></div><div class="cri"><div class="crl">SNR</div><div class="crv c8" id="vsn">--<span class="cu">dB</span></div></div><div class="cri"><div class="crl">Sinal</div><div id="sbar" class="sb"></div></div></div><div class="cs" id="pc">Pacotes: 0</div></div>
 </div>
-<footer>TCC — Estação Meteorológica IoT Autossuficiente com Comunicação LoRa<br>Guilherme Gimenes · RA 150053 · UNIFESP ICT SJC · 2026<br><a href="https://github.com/gimenes10/gateway_tcc" target="_blank">github.com/gimenes10/gateway_tcc</a></footer>
+
+<footer>
+TCC — Estação Meteorológica IoT Autossuficiente com Comunicação LoRa<br>
+Guilherme Gimenes · UNIFESP ICT — São José dos Campos · 2026<br>
+<a href="https://github.com/gimenes10/gateway_tcc" target="_blank">github.com/gimenes10/gateway_tcc</a>
+</footer>
 </div>
+
 <script>
-var C='9d10239851aa4a5fa45c7a5e8b7bdebd.s1.eu.hivemq.cloud',P='8884',U='gimten',W='Thiguipapa96@',T='estacao/sjc/dados',n=0;
-function mkRain(c){var e=document.getElementById('rain-fx');e.innerHTML='';for(var i=0;i<c;i++){var d=document.createElement('div');d.className='raindrop';d.style.left=Math.random()*100+'%';d.style.height=(10+Math.random()*20)+'px';d.style.animationDuration=(.4+Math.random()*.6)+'s';d.style.animationDelay=Math.random()*2+'s';d.style.opacity=.1+Math.random()*.4;e.appendChild(d)}}
-mkRain(80);
-function sigBar(r){var e=document.getElementById('sbar'),s=0;if(r>-60)s=5;else if(r>-70)s=4;else if(r>-80)s=3;else if(r>-90)s=2;else if(r>-100)s=1;var h='';for(var i=0;i<5;i++){var ht=4+i*4,a=i<s,c=a?(s>=4?'var(--green)':s>=2?'var(--yellow)':'var(--red)'):'var(--border)';h+='<div style="width:5px;height:'+ht+'px;border-radius:2px;background:'+c+'"></div>'}e.innerHTML=h}
+var MH='9d10239851aa4a5fa45c7a5e8b7bdebd.s1.eu.hivemq.cloud',MP='8884',MU='gimten',MW='Thiguipapa96@',MT='estacao/sjc/dados',n=0;
+
+/* Sparkline history */
+var hist={h:[],p:[],l:[],r:[]},HMAX=20;
+function pushH(k,v){hist[k].push(v);if(hist[k].length>HMAX)hist[k].shift()}
+function drawSpark(id,arr,color){
+var el=document.getElementById(id);if(!arr.length)return;
+var mn=Math.min.apply(null,arr),mx=Math.max.apply(null,arr),rng=mx-mn||1;
+var h='';for(var i=0;i<arr.length;i++){var pct=((arr[i]-mn)/rng)*100;h+='<div style="height:'+Math.max(2,pct)+'%;background:'+color+'"></div>'}
+el.innerHTML=h}
+
+/* Floating particles */
+function mkParts(){for(var i=0;i<15;i++){var p=document.createElement('div');p.className='particle';p.style.left=Math.random()*100+'%';p.style.width=p.style.height=(2+Math.random()*4)+'px';p.style.background=Math.random()>.5?'var(--accent)':'var(--purple)';p.style.animationDuration=(8+Math.random()*15)+'s';p.style.animationDelay=Math.random()*10+'s';document.body.appendChild(p)}}
+mkParts();
+
+/* Rain drops */
+function mkRain(c){var e=document.getElementById('rain-fx');e.innerHTML='';for(var i=0;i<c;i++){var d=document.createElement('div');d.className='drop';d.style.left=Math.random()*100+'%';d.style.height=(12+Math.random()*25)+'px';d.style.animationDuration=(.3+Math.random()*.5)+'s';d.style.animationDelay=Math.random()*2+'s';d.style.opacity=.15+Math.random()*.35;e.appendChild(d)}}
+mkRain(100);
+
+/* Signal bars */
+function sigBar(r){var e=document.getElementById('sbar'),s=r>-60?5:r>-70?4:r>-80?3:r>-90?2:r>-100?1:0;
+var h='';for(var i=0;i<5;i++){var ht=3+i*3.5,a=i<s,c=a?(s>=4?'var(--green)':s>=2?'var(--yellow)':'var(--red)'):'var(--border)';h+='<div style="width:4px;height:'+ht+'px;border-radius:1.5px;background:'+c+';transition:.3s"></div>'}
+e.innerHTML=h}
 sigBar(-999);
-function cond(d){if(d.chuva_status)return{e:'🌧',t:'Chovendo',b:'rain'};if(d.lux>10000)return{e:'☀',t:'Sol forte',b:'sun'};if(d.lux>1000)return{e:'🌤',t:'Parcialmente nublado',b:'sun'};if(d.lux>100)return{e:'⛅',t:'Nublado',b:''};if(d.lux>10)return{e:'🌥',t:'Muito nublado',b:''};return{e:'🌙',t:'Noite',b:''}}
-function luxD(l){if(l>50000)return'Luz solar direta';if(l>10000)return'Dia intenso';if(l>1000)return'Dia nublado';if(l>200)return'Bem iluminado';if(l>50)return'Iluminacao ambiente';if(l>10)return'Penumbra';return'Escuro / noite'}
-function upd(d){n++;var now=new Date(),tm=now.toLocaleTimeString('pt-BR'),dt=now.toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long'});
-document.getElementById('ticker').textContent='Ultima atualizacao: '+tm+' \u2014 '+dt+' \u2014 Pacote #'+n;
+
+function getCond(d){
+if(d.chuva_status)return{e:'🌧',t:'Chovendo',b:'rain'};
+if(d.lux>10000)return{e:'☀',t:'Sol forte',b:'sun'};
+if(d.lux>1000)return{e:'🌤',t:'Parcialmente nublado',b:'sun'};
+if(d.lux>100)return{e:'⛅',t:'Nublado',b:''};
+if(d.lux>10)return{e:'🌥',t:'Muito nublado',b:''};
+return{e:'🌙',t:'Noite',b:''}}
+
+function luxD(l){if(l>50000)return'Sol direto';if(l>10000)return'Dia intenso';if(l>1000)return'Dia nublado';if(l>200)return'Bem iluminado';if(l>50)return'Ambiente interno';if(l>10)return'Penumbra';return'Noite'}
+
+function upd(d){n++;var now=new Date(),tm=now.toLocaleTimeString('pt-BR'),dt=now.toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+document.getElementById('ticker').textContent=tm+' \u2014 '+dt+' \u2014 Pacote #'+n;
+var cc=getCond(d);
+document.getElementById('hw').textContent=cc.e;
 document.getElementById('ht').innerHTML=d.temperatura.toFixed(1)+'<span class="u">\u00b0C</span>';
-var cc=cond(d);document.getElementById('he').textContent=cc.e;document.getElementById('hd').textContent=cc.t+' \u00b7 '+d.temperatura.toFixed(0)+'\u00b0C';
-document.getElementById('mm-h').textContent=d.umidade.toFixed(0)+'%';document.getElementById('mm-p').textContent=d.pressao.toFixed(0)+' hPa';document.getElementById('mm-l').textContent=d.lux.toFixed(0)+' lux';document.getElementById('mm-r').textContent=d.rssi+' dBm';
-document.getElementById('vh').innerHTML=d.umidade.toFixed(1)+'<span class="cu">%</span>';
-document.getElementById('vp').innerHTML=d.pressao.toFixed(1)+'<span class="cu">hPa</span>';
-document.getElementById('vl').innerHTML=d.lux.toFixed(0)+'<span class="cu">lux</span>';
-document.getElementById('ld').textContent=luxD(d.lux);
+document.getElementById('hd').textContent=cc.t+' \u00b7 '+luxD(d.lux)+' \u00b7 '+d.umidade.toFixed(0)+'% umidade';
+
+/* Strip */
+document.getElementById('sh').innerHTML=d.umidade.toFixed(0)+'<span class="strip-unit">%</span>';
+document.getElementById('sp').innerHTML=d.pressao.toFixed(0)+'<span class="strip-unit">hPa</span>';
+document.getElementById('sl').innerHTML=d.lux.toFixed(0)+'<span class="strip-unit">lux</span>';
+document.getElementById('sr').innerHTML=d.rssi+'<span class="strip-unit">dBm</span>';
+
+/* Sparklines */
+pushH('h',d.umidade);pushH('p',d.pressao);pushH('l',d.lux);pushH('r',d.rssi);
+drawSpark('spark-h',hist.h,'#60a5fa44');drawSpark('spark-p',hist.p,'#a78bfa44');
+drawSpark('spark-l',hist.l,'#fbbf2444');drawSpark('spark-r',hist.r,'#38bdf844');
+
+/* Air quality */
 document.getElementById('vc').textContent=d.mq7_raw;document.getElementById('vg').textContent=d.mq2_raw;
 document.getElementById('vcv').textContent=d.mq7_voltage.toFixed(2);document.getElementById('vgv').textContent=d.mq2_voltage.toFixed(2);
+
+/* Rain */
 var rb=document.getElementById('rb'),re=document.getElementById('re');
-if(d.chuva_status){rb.innerHTML='🌧 Chovendo';rb.className='rb rb-wet';re.textContent='🌧'}else{rb.innerHTML='☀ Sem chuva';rb.className='rb rb-dry';re.textContent='🌤'}
+if(d.chuva_status){rb.innerHTML='🌧 Chovendo';rb.className='rb rb-wet';re.textContent='🌧'}
+else{rb.innerHTML='☀ Sem chuva';rb.className='rb rb-dry';re.textContent='🌤'}
 document.getElementById('rr').textContent='Raw: '+d.chuva_raw+' | '+d.chuva_voltage.toFixed(2)+'V';
-document.getElementById('rain-fx').classList.toggle('active',cc.b==='rain');document.getElementById('sun-fx').classList.toggle('active',cc.b==='sun');
-document.getElementById('vrs').innerHTML=d.rssi+'<span class="cu">dBm</span>';document.getElementById('vsn').innerHTML=d.snr+'<span class="cu">dB</span>';
-document.getElementById('pc').textContent='Pacotes recebidos: '+n;sigBar(d.rssi)}
+
+/* Weather FX */
+document.getElementById('rain-fx').classList.toggle('on',cc.b==='rain');
+document.getElementById('sun-fx').classList.toggle('on',cc.b==='sun');
+
+/* LoRa */
+document.getElementById('vrs').innerHTML=d.rssi+'<span class="cu">dBm</span>';
+document.getElementById('vsn').innerHTML=d.snr+'<span class="cu">dB</span>';
+document.getElementById('pc').textContent='Pacotes: '+n;sigBar(d.rssi)}
+
 function setC(s,t){document.getElementById('dot').className='dot '+s;document.getElementById('ct').textContent=t}
-var cl=mqtt.connect('wss://'+C+':'+P+'/mqtt',{username:U,password:W,protocol:'wss',reconnectPeriod:5000});
-cl.on('connect',function(){setC('on','Conectado');cl.subscribe(T);document.getElementById('loader').classList.add('hid')});
-cl.on('message',function(t,m){try{upd(JSON.parse(m.toString()))}catch(e){console.error(e)}});
+var cl=mqtt.connect('wss://'+MH+':'+MP+'/mqtt',{username:MU,password:MW,protocol:'wss',reconnectPeriod:5000});
+cl.on('connect',function(){setC('on','Online');cl.subscribe(MT);document.getElementById('loader').classList.add('hid')});
+cl.on('message',function(t,m){try{upd(JSON.parse(m.toString()))}catch(e){}});
 cl.on('error',function(){setC('off','Erro')});
 cl.on('offline',function(){setC('off','Offline')});
 cl.on('reconnect',function(){setC('wait','Reconectando...')});
-setTimeout(function(){var l=document.getElementById('loader');if(!l.classList.contains('hid')){document.getElementById('lo-msg').textContent='Conectado! Aguardando dados do sensor...'}},5000);
+setTimeout(function(){var l=document.getElementById('loader');if(!l.classList.contains('hid'))document.getElementById('lo-msg').textContent='Conectado! Aguardando dados do sensor...'},4000);
 </script>
 </body>
 </html>
