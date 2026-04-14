@@ -1,20 +1,24 @@
 #include "gateway_task.h"
 #include "pin_config.h"
+#include "credentials.h"
 #include "i2c_bus.h"
 #include "oled_ssd1306.h"
 #include "lora_sx1262.h"
 #include "lora_packet.h"
 #include "wifi_manager.h"
 #include "mqtt_publisher.h"
-#include "credentials.h"
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_log.h"
 #include <stdio.h>
 #include <string.h>
+#include <math.h>
 
 static const char *TAG = "gateway";
+
+/* Limiar de vibração para alerta de rajada (em g) */
+#define GUST_VIBRATION_THRESHOLD  0.15f
 
 static i2c_master_bus_handle_t  sensor_bus;
 static i2c_master_bus_handle_t  oled_bus;
@@ -92,7 +96,7 @@ err_init:
     return ret;
 }
 
-/* ---------- Log serial (formato idêntico ao sensor) ---------- */
+/* ---------- Log serial ---------- */
 
 static void log_packet(const lora_packet_t *pkt, int8_t rssi, int8_t snr)
 {
@@ -118,7 +122,7 @@ static void log_packet(const lora_packet_t *pkt, int8_t rssi, int8_t snr)
 /* ---------- OLED ---------- */
 
 static void update_oled(const lora_packet_t *pkt, int8_t rssi, int8_t snr,
-                        bool mqtt_ok)
+                        bool mqtt_ok, float vibration_g, bool gust_alert)
 {
     if (!oled_available) { return; }
 
@@ -140,8 +144,8 @@ static void update_oled(const lora_packet_t *pkt, int8_t rssi, int8_t snr,
              pkt->mq7_raw, pkt->mq2_raw);
     oled_draw_text(&oled, 0, 3, line);
 
-    snprintf(line, sizeof(line), "Ax:%.1f Ay:%.1f Az:%.1f",
-             pkt->accel_x, pkt->accel_y, pkt->accel_z);
+    snprintf(line, sizeof(line), "Vib:%.2fg %s",
+             vibration_g, gust_alert ? "RAJADA!" : "OK");
     oled_draw_text(&oled, 0, 4, line);
 
     snprintf(line, sizeof(line), "LoRa:%ddBm SNR:%d", rssi, snr);
@@ -152,7 +156,7 @@ static void update_oled(const lora_packet_t *pkt, int8_t rssi, int8_t snr,
              wifi_manager_is_connected() ? "OK" : "OFF");
     oled_draw_text(&oled, 0, 6, line);
 
-    snprintf(line, sizeof(line), "Pkts:%lu | GW v1.0",
+    snprintf(line, sizeof(line), "Pkts:%lu | GW v1.1",
              (unsigned long)pkt_count);
     oled_draw_text(&oled, 0, 7, line);
 
@@ -174,7 +178,6 @@ void gateway_task(void *arg)
 
     ESP_LOGI(TAG, "Entrando em modo RX continuo...");
 
-    /* Mostra tela de espera */
     if (oled_available) {
         oled_clear(&oled);
         oled_draw_text(&oled, 0, 0, "Gateway LoRa+MQTT");
@@ -217,11 +220,20 @@ void gateway_task(void *arg)
 
         pkt_count++;
 
+        /* Calcula vibração: magnitude da aceleração - 1g (gravidade) */
+        float accel_mag = sqrtf(pkt.accel_x * pkt.accel_x +
+                                pkt.accel_y * pkt.accel_y +
+                                pkt.accel_z * pkt.accel_z);
+        float vibration_g = fabsf(accel_mag - 1.0f);
+        bool gust_alert = (vibration_g > GUST_VIBRATION_THRESHOLD);
+
         /* 1. Log serial */
         log_packet(&pkt, rssi, snr);
+        ESP_LOGI(TAG, "Vibracao | %.3f g | %s",
+                 vibration_g, gust_alert ? "ALERTA RAJADA!" : "Normal");
 
         /* 2. Publica via MQTT */
-        mqtt_ok = (mqtt_publish_data(&pkt, rssi, snr) == ESP_OK);
+        mqtt_ok = (mqtt_publish_data(&pkt, rssi, snr, vibration_g, gust_alert) == ESP_OK);
         if (mqtt_ok) {
             ESP_LOGI(TAG, "MQTT publicado no topico '%s'", MQTT_TOPIC_DATA);
         } else {
@@ -229,6 +241,6 @@ void gateway_task(void *arg)
         }
 
         /* 3. Atualiza OLED */
-        update_oled(&pkt, rssi, snr, mqtt_ok);
+        update_oled(&pkt, rssi, snr, mqtt_ok, vibration_g, gust_alert);
     }
 }

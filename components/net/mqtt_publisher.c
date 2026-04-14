@@ -1,13 +1,13 @@
 #include "mqtt_publisher.h"
 #include "credentials.h"
 #include "mqtt_client.h"
+#include "esp_crt_bundle.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/event_groups.h"
 #include <stdio.h>
 #include <string.h>
-#include "esp_crt_bundle.h"
 
 static const char *TAG = "mqtt";
 
@@ -72,7 +72,6 @@ esp_err_t mqtt_publisher_init(void)
 
     ESP_LOGI(TAG, "Conectando ao broker MQTT...");
 
-    /* Aguarda conexão */
     EventBits_t bits = xEventGroupWaitBits(
         s_mqtt_event_group,
         MQTT_CONNECTED_BIT,
@@ -88,14 +87,14 @@ esp_err_t mqtt_publisher_init(void)
     return ESP_ERR_TIMEOUT;
 }
 
-esp_err_t mqtt_publish_data(const lora_packet_t *pkt, int8_t rssi, int8_t snr)
+esp_err_t mqtt_publish_data(const lora_packet_t *pkt, int8_t rssi, int8_t snr,
+                            float vibration_g, bool gust_alert)
 {
     if (!s_connected || s_client == NULL) {
         return ESP_ERR_INVALID_STATE;
     }
 
-    /* Monta JSON com todos os dados */
-    char json[512];
+    char json[600];
     int len = snprintf(json, sizeof(json),
         "{"
         "\"temperatura\":%.2f,"
@@ -116,6 +115,8 @@ esp_err_t mqtt_publish_data(const lora_packet_t *pkt, int8_t rssi, int8_t snr)
         "\"gyro_y\":%.1f,"
         "\"gyro_z\":%.1f,"
         "\"imu_temp\":%.1f,"
+        "\"vibration_g\":%.3f,"
+        "\"gust_alert\":%d,"
         "\"rssi\":%d,"
         "\"snr\":%d"
         "}",
@@ -127,6 +128,7 @@ esp_err_t mqtt_publish_data(const lora_packet_t *pkt, int8_t rssi, int8_t snr)
         pkt->accel_x, pkt->accel_y, pkt->accel_z,
         pkt->gyro_x, pkt->gyro_y, pkt->gyro_z,
         pkt->imu_temp_c,
+        vibration_g, gust_alert ? 1 : 0,
         rssi, snr
     );
 
