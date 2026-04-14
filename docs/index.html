@@ -23,7 +23,6 @@ body{background:var(--bg);color:var(--text);font-family:'Space Grotesk',sans-ser
 @keyframes sg{0%,100%{transform:scale(1);opacity:.4}50%{transform:scale(1.2);opacity:.7}}
 .sun-ray{position:absolute;top:50%;left:50%;width:300px;height:1px;background:linear-gradient(90deg,#fbbf2422,transparent);transform-origin:0 50%;animation:sra 15s linear infinite}
 @keyframes sra{to{transform:rotate(360deg)}}
-/* Gust shake animation */
 @keyframes shake{0%,100%{transform:translateX(0)}10%,30%,50%,70%,90%{transform:translateX(-3px)}20%,40%,60%,80%{transform:translateX(3px)}}
 .gust-shake{animation:shake .5s ease-in-out}
 .page{position:relative;z-index:1;min-height:100vh;display:flex;flex-direction:column}
@@ -60,13 +59,17 @@ header{padding:20px 28px;display:flex;align-items:center;justify-content:space-b
 .cr{display:flex;gap:16px;margin-top:10px}.cri{flex:1}
 .crl{font-size:9px;color:var(--text3);font-family:'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:.5px}
 .crv{font-size:20px;font-family:'JetBrains Mono',monospace;font-weight:600;margin-top:3px}
-.rb{display:inline-flex;align-items:center;gap:8px;padding:8px 18px;border-radius:24px;font-size:14px;font-family:'JetBrains Mono',monospace;font-weight:600;transition:.4s}
-.rb-dry{background:#0f291a;border:1px solid #22c55e33;color:var(--green)}
-.rb-wet{background:#29101088;border:1px solid #f8717155;color:var(--red);animation:rp 2s infinite}
-@keyframes rp{0%,100%{box-shadow:0 0 0 0 #f8717122}50%{box-shadow:0 0 24px 6px #f8717118}}
+
+/* Status badges — unified style */
+.badge{display:flex;align-items:center;gap:10px;padding:10px 18px;border-radius:12px;font-size:14px;font-family:'JetBrains Mono',monospace;font-weight:600;transition:.4s;width:100%}
+.badge-ok{background:linear-gradient(135deg,#0a1f14,#0f291a);border:1px solid #22c55e28;color:var(--green)}
+.badge-ok .badge-dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);flex-shrink:0}
+.badge-alert{background:linear-gradient(135deg,#1f0a0a,#29101a);border:1px solid #f8717144;color:var(--red);animation:rp 2s infinite}
+.badge-alert .badge-dot{width:8px;height:8px;border-radius:50%;background:var(--red);box-shadow:0 0 8px var(--red);flex-shrink:0;animation:bk .8s infinite}
+@keyframes rp{0%,100%{box-shadow:0 0 0 0 #f8717122}50%{box-shadow:0 0 20px 4px #f8717118}}
+
 .sb{display:flex;align-items:flex-end;gap:3px;height:18px}
 .c1{color:var(--accent)}.c2{color:var(--warm)}.c3{color:var(--green)}.c4{color:var(--blue)}.c5{color:var(--purple)}.c6{color:var(--yellow)}.c7{color:var(--red)}.c8{color:var(--teal)}
-/* Gust alert card special border */
 .card-gust-alert{border-color:var(--red)!important;box-shadow:0 0 24px #f8717122!important}
 footer{margin-top:auto;text-align:center;padding:28px 20px;font-size:11px;color:var(--text3);font-family:'JetBrains Mono',monospace;border-top:1px solid var(--border);line-height:1.8}
 footer a{color:var(--accent);text-decoration:none}
@@ -103,15 +106,18 @@ footer a{color:var(--accent);text-decoration:none}
 </div>
 <div class="cards">
 <div class="card"><div class="ch"><span class="cl">Qualidade do ar</span><span class="ce">🏭</span></div><div class="cr"><div class="cri"><div class="crl">CO (MQ-7)</div><div class="crv c2" id="vc">--</div></div><div class="cri"><div class="crl">GLP (MQ-2)</div><div class="crv c2" id="vg">--</div></div></div><div class="cs"><span id="vcv">--</span>V / <span id="vgv">--</span>V</div></div>
-<div class="card"><div class="ch"><span class="cl">Precipitação</span><span class="ce" id="re">🌤</span></div><div id="rb" class="rb rb-dry">☀ Sem chuva</div><div class="cs" id="rr">Sensor FC-22</div></div>
-<div class="card" id="vib-card"><div class="ch"><span class="cl">Vibração / Rajada</span><span class="ce" id="vib-emoji">🍃</span></div><div class="cv c3" id="v-vib">--<span class="cu">g</span></div><div id="vib-badge" class="rb rb-dry">🍃 Normal</div><div class="cs" id="vib-sub">Sensor MPU-6050 · Limiar: 0.15g</div></div>
+
+<div class="card"><div class="ch"><span class="cl">Precipitação</span><span class="ce" id="re">🌤</span></div><div id="rb" class="badge badge-ok"><span class="badge-dot"></span><span>Sem chuva</span></div><div class="cs" id="rr">Sensor FC-22</div></div>
+
+<div class="card" id="vib-card"><div class="ch"><span class="cl">Vibração / Rajada</span><span class="ce" id="vib-emoji">🍃</span></div><div id="vib-badge" class="badge badge-ok"><span class="badge-dot"></span><span id="vib-text">Normal — 0.000g</span></div><div class="cs" id="vib-sub">Sensor MPU-6050 · Limiar: 0.15g</div></div>
+
 <div class="card"><div class="ch"><span class="cl">Link LoRa 915 MHz</span><span class="ce">📡</span></div><div class="cr"><div class="cri"><div class="crl">RSSI</div><div class="crv c1" id="vrs">--<span class="cu">dBm</span></div></div><div class="cri"><div class="crl">SNR</div><div class="crv c8" id="vsn">--<span class="cu">dB</span></div></div><div class="cri"><div class="crl">Sinal</div><div id="sbar" class="sb"></div></div></div><div class="cs" id="pc">Pacotes: 0</div></div>
 </div>
 <footer>TCC — Estação Meteorológica IoT Autossuficiente com Comunicação LoRa<br>Guilherme Gimenes · UNIFESP ICT — São José dos Campos · 2026<br><a href="https://github.com/gimenes10/gateway_tcc" target="_blank">github.com/gimenes10/gateway_tcc</a></footer>
 </div>
 <script>
 var MH='9d10239851aa4a5fa45c7a5e8b7bdebd.s1.eu.hivemq.cloud',MP='8884',MU='gimten',MW='Thiguipapa96@',MT='estacao/sjc/dados',n=0;
-var hist={h:[],p:[],l:[],r:[],v:[]},HMAX=20;
+var hist={h:[],p:[],l:[],r:[]},HMAX=20;
 function pushH(k,v){hist[k].push(v);if(hist[k].length>HMAX)hist[k].shift()}
 function drawSpark(id,arr,color){var el=document.getElementById(id);if(!arr.length)return;var mn=Math.min.apply(null,arr),mx=Math.max.apply(null,arr),rng=mx-mn||1;var h='';for(var i=0;i<arr.length;i++){var pct=((arr[i]-mn)/rng)*100;h+='<div style="height:'+Math.max(2,pct)+'%;background:'+color+'"></div>'}el.innerHTML=h}
 function mkParts(){for(var i=0;i<15;i++){var p=document.createElement('div');p.className='particle';p.style.left=Math.random()*100+'%';p.style.width=p.style.height=(2+Math.random()*4)+'px';p.style.background=Math.random()>.5?'var(--accent)':'var(--purple)';p.style.animationDuration=(8+Math.random()*15)+'s';p.style.animationDelay=Math.random()*10+'s';document.body.appendChild(p)}}
@@ -137,20 +143,19 @@ drawSpark('spark-h',hist.h,'#60a5fa44');drawSpark('spark-p',hist.p,'#a78bfa44');
 drawSpark('spark-l',hist.l,'#fbbf2444');drawSpark('spark-r',hist.r,'#38bdf844');
 document.getElementById('vc').textContent=d.mq7_raw;document.getElementById('vg').textContent=d.mq2_raw;
 document.getElementById('vcv').textContent=d.mq7_voltage.toFixed(2);document.getElementById('vgv').textContent=d.mq2_voltage.toFixed(2);
+/* Chuva */
 var rb=document.getElementById('rb'),re=document.getElementById('re');
-if(d.chuva_status){rb.innerHTML='🌧 Chovendo';rb.className='rb rb-wet';re.textContent='🌧'}
-else{rb.innerHTML='☀ Sem chuva';rb.className='rb rb-dry';re.textContent='🌤'}
+if(d.chuva_status){rb.innerHTML='<span class="badge-dot"></span><span>Chovendo \u2014 '+d.chuva_voltage.toFixed(2)+'V</span>';rb.className='badge badge-alert';re.textContent='🌧'}
+else{rb.innerHTML='<span class="badge-dot"></span><span>Sem chuva</span>';rb.className='badge badge-ok';re.textContent='🌤'}
 document.getElementById('rr').textContent='Raw: '+d.chuva_raw+' | '+d.chuva_voltage.toFixed(2)+'V';
 document.getElementById('rain-fx').classList.toggle('on',cc.b==='rain');
 document.getElementById('sun-fx').classList.toggle('on',cc.b==='sun');
-/* Vibração / Rajada */
+/* Vibração */
 var vg=d.vibration_g||0,ga=d.gust_alert||0;
-document.getElementById('v-vib').innerHTML=vg.toFixed(3)+'<span class="cu">g</span>';
 var vb=document.getElementById('vib-badge'),ve=document.getElementById('vib-emoji'),vc2=document.getElementById('vib-card');
-if(ga){vb.innerHTML='💨 RAJADA DETECTADA!';vb.className='rb rb-wet';ve.textContent='💨';vc2.classList.add('card-gust-alert');vc2.classList.add('gust-shake');setTimeout(function(){vc2.classList.remove('gust-shake')},500)}
-else{vb.innerHTML='🍃 Normal';vb.className='rb rb-dry';ve.textContent='🍃';vc2.classList.remove('card-gust-alert')}
-var amag=Math.sqrt(d.accel_x*d.accel_x+d.accel_y*d.accel_y+d.accel_z*d.accel_z);
-document.getElementById('vib-sub').textContent='Mag: '+amag.toFixed(2)+'g | Vib: '+vg.toFixed(3)+'g';
+if(ga){vb.innerHTML='<span class="badge-dot"></span><span>Rajada detectada! \u2014 '+vg.toFixed(3)+'g</span>';vb.className='badge badge-alert';ve.textContent='💨';vc2.classList.add('card-gust-alert');vc2.classList.add('gust-shake');setTimeout(function(){vc2.classList.remove('gust-shake')},500)}
+else{vb.innerHTML='<span class="badge-dot"></span><span>Normal \u2014 '+vg.toFixed(3)+'g</span>';vb.className='badge badge-ok';ve.textContent='🍃';vc2.classList.remove('card-gust-alert')}
+document.getElementById('vib-sub').textContent='Sensor MPU-6050 \u00b7 Limiar: 0.15g';
 /* LoRa */
 document.getElementById('vrs').innerHTML=d.rssi+'<span class="cu">dBm</span>';
 document.getElementById('vsn').innerHTML=d.snr+'<span class="cu">dB</span>';
