@@ -18,15 +18,13 @@ esp_err_t mqtt_publisher_init(void);
 
 /**
  * @brief Publica os dados de um pacote no tópico MQTT como JSON.
- * @param pkt         Pacote decodificado
- * @param rssi        RSSI do LoRa em dBm
- * @param snr         SNR do LoRa em dB
- * @param vibration_g Vibração em g (desvio da gravidade)
- * @param gust_alert  true se rajada detectada
+ *        Campos de sensores sem bit em `pkt->valid` são publicados como null.
+ * @param pkt   Pacote decodificado (v2)
+ * @param rssi  RSSI do LoRa em dBm
+ * @param snr   SNR do LoRa em dB
  * @return ESP_OK em sucesso
  */
-esp_err_t mqtt_publish_data(const lora_packet_t *pkt, int8_t rssi, int8_t snr,
-                            float vibration_g, bool gust_alert);
+esp_err_t mqtt_publish_data(const lora_packet_t *pkt, int8_t rssi, int8_t snr);
 
 /**
  * @brief Retorna true se o MQTT está conectado.

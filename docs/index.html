@@ -207,11 +207,11 @@ footer a:hover{color:var(--amb);border-color:var(--amb)}
       <div class="sub" id="lux-sub"></div>
       <svg id="sp-lux" viewBox="0 0 100 26" preserveAspectRatio="none"></svg>
     </div>
-    <div class="card tile" id="vib-card">
-      <div class="k">Vibração</div>
-      <div class="v" id="vib">--<span class="u">g</span></div>
-      <div class="sub" id="vib-sub">Limiar de rajada 0,15 g</div>
-      <svg id="sp-vib" viewBox="0 0 100 26" preserveAspectRatio="none"></svg>
+    <div class="card tile" id="wind-card">
+      <div class="k">Vento</div>
+      <div class="v" id="wind">--<span class="u">m/s</span></div>
+      <div class="sub" id="wind-sub">Anemômetro em instalação</div>
+      <svg id="sp-wind" viewBox="0 0 100 26" preserveAspectRatio="none"></svg>
     </div>
   </section>
 
@@ -272,13 +272,19 @@ var MH='9d10239851aa4a5fa45c7a5e8b7bdebd.s1.eu.hivemq.cloud',
    Publicação usa outro usuário, definido em components/board_config/include/credentials.h */
 
 var HMAX=40, STALE_MS=120000;
-var hist={t:[],h:[],p:[],l:[],v:[]};
+var hist={t:[],h:[],p:[],l:[],w:[]};
 var pkts=0, lastAt=0;
 var $=function(id){return document.getElementById(id)};
 
+/* ---------- valores ausentes ----------
+   O gateway publica null quando o sensor falhou ou não está instalado. */
+function has(v){ return typeof v==='number' && isFinite(v); }
+
 /* ---------- formatação pt-BR ---------- */
 function num(v,d){ return v.toFixed(d).replace('.',','); }
-function val(el,v,d,unit){ $(el).innerHTML=num(v,d)+'<span class="u">'+unit+'</span>'; }
+function val(el,v,d,unit){
+  $(el).innerHTML=(has(v)?num(v,d):'--')+'<span class="u">'+unit+'</span>';
+}
 
 /* ---------- sparkline suave ---------- */
 function curve(pts){
@@ -310,7 +316,7 @@ function spark(id,arr,color,h,fill){
        'vector-effect="non-scaling-stroke"/>';
   el.innerHTML=svg;
 }
-function push(k,v){ var a=hist[k]; a.push(v); if(a.length>HMAX) a.shift(); }
+function push(k,v){ if(!has(v)) return; var a=hist[k]; a.push(v); if(a.length>HMAX) a.shift(); }
 
 /* ---------- ícones de condição ---------- */
 var ICON={
@@ -321,12 +327,13 @@ var ICON={
   moon:'<path d="M20 14.5A8.5 8.5 0 019.5 4a8.5 8.5 0 1010.5 10.5z"/>'
 };
 function cond(d){
-  if(d.chuva_status)  return {i:'rain', t:'Chuva',                 c:'#60a5fa'};
-  if(d.lux>20000)     return {i:'sun',  t:'Céu limpo',             c:'#fbbf24'};
-  if(d.lux>3000)      return {i:'part', t:'Parcialmente nublado',  c:'#38bdf8'};
-  if(d.lux>300)       return {i:'cloud',t:'Nublado',               c:'#94a3b8'};
-  if(d.lux>15)        return {i:'cloud',t:'Encoberto',             c:'#8b93a5'};
-  return                     {i:'moon', t:'Noite',                 c:'#818cf8'};
+  if(d.chuva_status===1) return {i:'rain', t:'Chuva',                 c:'#60a5fa'};
+  if(!has(d.lux))        return {i:'cloud',t:'Sem leitura de luminosidade', c:'#8b93a5'};
+  if(d.lux>20000)        return {i:'sun',  t:'Céu limpo',             c:'#fbbf24'};
+  if(d.lux>3000)         return {i:'part', t:'Parcialmente nublado',  c:'#38bdf8'};
+  if(d.lux>300)          return {i:'cloud',t:'Nublado',               c:'#94a3b8'};
+  if(d.lux>15)           return {i:'cloud',t:'Encoberto',             c:'#8b93a5'};
+  return                        {i:'moon', t:'Noite',                 c:'#818cf8'};
 }
 function luxTxt(l){
   if(l>50000) return 'Sol a pino';
@@ -371,9 +378,11 @@ function update(d){
   $('mark').querySelector('svg').innerHTML=path;
 
   /* temperatura */
+  var tOk=has(d.temperatura), hOk=has(d.umidade);
   val('temp',d.temperatura,1,'°C');
-  var hi=heat(d.temperatura,d.umidade);
-  $('cond').innerHTML=c.t+(hi-d.temperatura>0.5?' <span>· sensação de '+num(hi,0)+' °C</span>':'');
+  var hi=(tOk&&hOk)?heat(d.temperatura,d.umidade):NaN;
+  $('cond').innerHTML=c.t+(has(hi)&&hi-d.temperatura>0.5?' <span>· sensação de '+num(hi,0)+' °C</span>':'')
+                     +(tOk?'':' <span>· temperatura indisponível</span>');
   push('t',d.temperatura);
   spark('temp-chart',hist.t,c.c,40,true);
   if(hist.t.length>1){
@@ -382,36 +391,34 @@ function update(d){
 
   /* umidade */
   val('hum',d.umidade,0,'%');
-  $('hum-sub').textContent='Ponto de orvalho '+num(dew(d.temperatura,d.umidade),1)+' °C';
+  $('hum-sub').textContent=(tOk&&hOk)?'Ponto de orvalho '+num(dew(d.temperatura,d.umidade),1)+' °C':'Sem leitura';
   push('h',d.umidade); spark('sp-hum',hist.h,'#60a5fa',26,true);
 
   /* pressão */
   val('pre',d.pressao,0,'hPa');
   push('p',d.pressao);
-  $('pre-sub').textContent=trend();
+  $('pre-sub').textContent=has(d.pressao)?trend():'Sem leitura';
   spark('sp-pre',hist.p,'#a78bfa',26,true);
 
   /* luminosidade */
   val('lux',d.lux,0,'lux');
-  $('lux-sub').textContent=luxTxt(d.lux);
+  $('lux-sub').textContent=has(d.lux)?luxTxt(d.lux):'Sem leitura';
   push('l',d.lux); spark('sp-lux',hist.l,'#fbbf24',26,true);
 
-  /* vibração */
-  var g=d.vibration_g||0, gust=!!d.gust_alert;
-  val('vib',g,3,'g');
-  $('vib-sub').textContent=gust?'Rajada detectada':'Limiar de rajada 0,15 g';
-  $('vib-card').classList.toggle('alert',gust);
-  push('v',g); spark('sp-vib',hist.v,gust?'#f87171':'#2dd4bf',26,true);
+  /* vento (anemômetro — futuro) */
+  val('wind',d.vento_ms,1,'m/s');
+  $('wind-sub').textContent=has(d.vento_ms)?num(d.vento_ms*3.6,0)+' km/h':'Anemômetro em instalação';
+  push('w',d.vento_ms); spark('sp-wind',hist.w,'#2dd4bf',26,true);
 
   /* qualidade do ar */
   air('mq7',d.mq7_voltage); air('mq2',d.mq2_voltage);
 
   /* precipitação */
-  var pill=$('rain-pill');
-  pill.className='pill '+(d.chuva_status?'alert':'ok');
-  $('rain-txt').textContent=d.chuva_status?'Chovendo':'Sem chuva';
-  $('rain-sub').textContent='FC-22 · '+num(d.chuva_voltage,2)+' V';
-  $('rain-card').classList.toggle('alert',!!d.chuva_status);
+  var pill=$('rain-pill'), rOk=has(d.chuva_status), raining=d.chuva_status===1;
+  pill.className='pill '+(!rOk?'':raining?'alert':'ok');
+  $('rain-txt').textContent=!rOk?'Sem leitura':raining?'Chovendo':'Sem chuva';
+  $('rain-sub').textContent='FC-22 · '+(has(d.chuva_voltage)?num(d.chuva_voltage,2)+' V':'--');
+  $('rain-card').classList.toggle('alert',raining);
 
   /* enlace */
   val('rssi',d.rssi,0,'dBm'); val('snr',d.snr,0,'dB');
@@ -421,10 +428,15 @@ function update(d){
   age();
 }
 function air(id,v){
+  var bar=$(id+'-bar');
+  if(!has(v)){
+    $(id).innerHTML='--<i>V</i>';
+    bar.style.width='0'; return;
+  }
   var pct=Math.max(2,Math.min(100,(v/3.3)*100));
   var col=v>2.2?'var(--bad)':v>1.4?'var(--warn)':'var(--ok)';
   $(id).innerHTML=num(v,2)+'<i>V</i>';
-  var bar=$(id+'-bar'); bar.style.width=pct+'%'; bar.style.background=col;
+  bar.style.width=pct+'%'; bar.style.background=col;
 }
 function signal(r){
   var lv=r>-60?5:r>-70?4:r>-80?3:r>-95?2:r>-110?1:0;

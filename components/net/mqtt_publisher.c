@@ -8,6 +8,7 @@
 #include "freertos/event_groups.h"
 #include <stdio.h>
 #include <string.h>
+#include <math.h>
 
 static const char *TAG = "mqtt";
 
@@ -87,59 +88,81 @@ esp_err_t mqtt_publisher_init(void)
     return ESP_ERR_TIMEOUT;
 }
 
-esp_err_t mqtt_publish_data(const lora_packet_t *pkt, int8_t rssi, int8_t snr,
-                            float vibration_g, bool gust_alert)
+/* ---------- Montagem do JSON ---------- */
+
+typedef struct {
+    char   *buf;
+    size_t  size;
+    size_t  len;
+    bool    overflow;
+} json_buf_t;
+
+/**
+ * @brief Acrescenta "key":valor, (ou "key":null, se !ok) ao buffer.
+ */
+static void json_num(json_buf_t *j, const char *key, bool ok, double v, int dec)
+{
+    if (j->overflow) { return; }
+
+    ok = ok && isfinite(v);   /* NaN/Inf viraria JSON inválido — publica null */
+
+    size_t room = j->size - j->len;
+    int n = ok ? snprintf(j->buf + j->len, room, "\"%s\":%.*f,", key, dec, v)
+               : snprintf(j->buf + j->len, room, "\"%s\":null,", key);
+
+    if (n < 0 || (size_t)n >= room) {
+        j->overflow = true;
+        return;
+    }
+    j->len += (size_t)n;
+}
+
+esp_err_t mqtt_publish_data(const lora_packet_t *pkt, int8_t rssi, int8_t snr)
 {
     if (!s_connected || s_client == NULL) {
         return ESP_ERR_INVALID_STATE;
     }
 
-    char json[600];
-    int len = snprintf(json, sizeof(json),
-        "{"
-        "\"temperatura\":%.2f,"
-        "\"umidade\":%.1f,"
-        "\"pressao\":%.2f,"
-        "\"lux\":%.1f,"
-        "\"mq7_raw\":%d,"
-        "\"mq7_voltage\":%.2f,"
-        "\"mq2_raw\":%d,"
-        "\"mq2_voltage\":%.2f,"
-        "\"chuva_raw\":%d,"
-        "\"chuva_voltage\":%.2f,"
-        "\"chuva_status\":%d,"
-        "\"accel_x\":%.2f,"
-        "\"accel_y\":%.2f,"
-        "\"accel_z\":%.2f,"
-        "\"gyro_x\":%.1f,"
-        "\"gyro_y\":%.1f,"
-        "\"gyro_z\":%.1f,"
-        "\"imu_temp\":%.1f,"
-        "\"vibration_g\":%.3f,"
-        "\"gust_alert\":%d,"
-        "\"rssi\":%d,"
-        "\"snr\":%d"
-        "}",
-        pkt->temperature_c, pkt->humidity_pct, pkt->pressure_hpa,
-        pkt->lux,
-        pkt->mq7_raw, pkt->mq7_voltage,
-        pkt->mq2_raw, pkt->mq2_voltage,
-        pkt->rain_raw, pkt->rain_voltage, pkt->rain_status,
-        pkt->accel_x, pkt->accel_y, pkt->accel_z,
-        pkt->gyro_x, pkt->gyro_y, pkt->gyro_z,
-        pkt->imu_temp_c,
-        vibration_g, gust_alert ? 1 : 0,
-        rssi, snr
-    );
+    char json[512];
+    json_buf_t j = { .buf = json, .size = sizeof(json), .len = 1 };
+    json[0] = '{';
+
+    const bool bme  = lora_packet_has(pkt, LORA_VALID_BME280);
+    const bool bh   = lora_packet_has(pkt, LORA_VALID_BH1750);
+    const bool mq7  = lora_packet_has(pkt, LORA_VALID_MQ7);
+    const bool mq2  = lora_packet_has(pkt, LORA_VALID_MQ2);
+    const bool rain = lora_packet_has(pkt, LORA_VALID_RAIN);
+    const bool wind = lora_packet_has(pkt, LORA_VALID_WIND);
+
+    json_num(&j, "temperatura",   bme,  pkt->temperature_c, 2);
+    json_num(&j, "umidade",       bme,  pkt->humidity_pct,  1);
+    json_num(&j, "pressao",       bme,  pkt->pressure_hpa,  2);
+    json_num(&j, "lux",           bh,   pkt->lux,           1);
+    json_num(&j, "mq7_raw",       mq7,  pkt->mq7_raw,       0);
+    json_num(&j, "mq7_voltage",   mq7,  pkt->mq7_voltage,   2);
+    json_num(&j, "mq2_raw",       mq2,  pkt->mq2_raw,       0);
+    json_num(&j, "mq2_voltage",   mq2,  pkt->mq2_voltage,   2);
+    json_num(&j, "chuva_raw",     rain, pkt->rain_raw,      0);
+    json_num(&j, "chuva_voltage", rain, pkt->rain_voltage,  2);
+    json_num(&j, "chuva_status",  rain, pkt->rain_status,   0);
+    json_num(&j, "vento_ms",      wind, pkt->wind_ms,       1);
+    json_num(&j, "rssi",          true, rssi,               0);
+    json_num(&j, "snr",           true, snr,                0);
+
+    if (j.overflow) {
+        ESP_LOGE(TAG, "JSON excedeu o buffer (%zu bytes)", sizeof(json));
+        return ESP_ERR_NO_MEM;
+    }
+    json[j.len - 1] = '}';   /* Troca a vírgula final pelo fechamento */
 
     int msg_id = esp_mqtt_client_publish(s_client, MQTT_TOPIC_DATA,
-                                         json, len, 1, 0);
+                                         json, (int)j.len, 1, 0);
     if (msg_id < 0) {
         ESP_LOGE(TAG, "Falha ao publicar MQTT");
         return ESP_FAIL;
     }
 
-    ESP_LOGD(TAG, "MQTT pub OK (msg_id=%d, %d bytes)", msg_id, len);
+    ESP_LOGD(TAG, "MQTT pub OK (msg_id=%d, %zu bytes)", msg_id, j.len);
     return ESP_OK;
 }
 
