@@ -118,6 +118,7 @@ static void log_packet(const lora_packet_t *pkt, int8_t rssi, int8_t snr)
     const bool mq2  = lora_packet_has(pkt, LORA_VALID_MQ2);
     const bool rain = lora_packet_has(pkt, LORA_VALID_RAIN);
     const bool wind = lora_packet_has(pkt, LORA_VALID_WIND);
+    const bool gauge = lora_packet_has(pkt, LORA_VALID_GAUGE);
     char a[16], b[16], c[16];
 
     ESP_LOGI(TAG, "=== Pacote #%lu (RSSI=%d dBm, SNR=%d dB, valid=0x%02X) ===",
@@ -138,8 +139,11 @@ static void log_packet(const lora_packet_t *pkt, int8_t rssi, int8_t snr)
              fmt_val(a, sizeof(a), rain, "%.0f", pkt->rain_raw),
              fmt_val(b, sizeof(b), rain, "%.2f", pkt->rain_voltage),
              rain ? (pkt->rain_status ? "CHOVENDO" : "SECO") : "--");
-    ESP_LOGI(TAG, "Vento   | %s m/s",
-             fmt_val(a, sizeof(a), wind, "%.1f", pkt->wind_ms));
+    ESP_LOGI(TAG, "Vento   | Media=%s m/s | Rajada=%s m/s",
+             fmt_val(a, sizeof(a), wind, "%.1f", pkt->wind_avg_ms),
+             fmt_val(b, sizeof(b), wind, "%.1f", pkt->wind_gust_ms));
+    ESP_LOGI(TAG, "Pluvio  | Acumulado=%s mm",
+             fmt_val(a, sizeof(a), gauge, "%.2f", pkt->rain_total_mm));
 }
 
 /* ---------- OLED ---------- */
@@ -179,7 +183,7 @@ static void update_oled(const lora_packet_t *pkt, int8_t rssi, int8_t snr, bool 
     oled_draw_text(&oled, 0, 3, line);
 
     snprintf(line, sizeof(line), "Vento:%s m/s",
-             fmt_val(a, sizeof(a), wind, "%.1f", pkt->wind_ms));
+             fmt_val(a, sizeof(a), wind, "%.1f", pkt->wind_avg_ms));
     oled_draw_text(&oled, 0, 4, line);
 
     snprintf(line, sizeof(line), "LoRa:%ddBm SNR:%d", rssi, snr);

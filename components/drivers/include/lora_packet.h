@@ -2,7 +2,7 @@
  * @file lora_packet.h
  * @brief Formato do pacote de dados da estação meteorológica para transmissão LoRa.
  *
- * Pacote binário compacto (v2, 45 bytes) com os dados dos sensores.
+ * Pacote binário compacto (v3, 53 bytes) com os dados dos sensores.
  * Compartilhado entre nó sensor (TX) e nó gateway (RX) — manter os dois
  * arquivos idênticos.
  *
@@ -19,7 +19,7 @@
 /* Magic bytes + versão para validar integridade e compatibilidade */
 #define LORA_PKT_MAGIC_0   0xCA
 #define LORA_PKT_MAGIC_1   0xFE
-#define LORA_PKT_VERSION   2
+#define LORA_PKT_VERSION   3
 
 /* Bits de validade por sensor (campo `valid`) */
 #define LORA_VALID_BME280  (1U << 0)   /* temperatura, umidade, pressão */
@@ -27,19 +27,21 @@
 #define LORA_VALID_MQ7     (1U << 2)   /* mq7_raw, mq7_voltage */
 #define LORA_VALID_MQ2     (1U << 3)   /* mq2_raw, mq2_voltage */
 #define LORA_VALID_RAIN    (1U << 4)   /* rain_raw, rain_voltage, rain_status */
-#define LORA_VALID_WIND    (1U << 5)   /* wind_ms — anemômetro (futuro) */
+#define LORA_VALID_WIND    (1U << 5)   /* wind_avg_ms, wind_gust_ms — anemômetro */
+#define LORA_VALID_GAUGE   (1U << 6)   /* rain_total_mm — pluviômetro basculante */
 
 /**
- * @brief Estrutura do pacote da estação meteorológica (v2).
+ * @brief Estrutura do pacote da estação meteorológica (v3).
  *
  * Layout binário (little-endian, packed):
  *   [2B magic][1B version][1B valid]
  *   [4B temp][4B umid][4B press][4B lux]
  *   [2B mq7_raw][4B mq7_v][2B mq2_raw][4B mq2_v]
  *   [2B rain_raw][4B rain_v][1B rain_status]
- *   [4B wind_ms]
+ *   [4B wind_avg_ms][4B wind_gust_ms]
+ *   [4B rain_total_mm]
  *   [2B crc16]
- *   Total: 45 bytes
+ *   Total: 53 bytes
  */
 typedef struct __attribute__((packed)) {
     /* Header */
@@ -68,14 +70,18 @@ typedef struct __attribute__((packed)) {
     float    rain_voltage;
     uint8_t  rain_status;   /* 1 = chovendo, 0 = seco */
 
-    /* Anemômetro (futuro) */
-    float    wind_ms;
+    /* Anemômetro */
+    float    wind_avg_ms;   /* Média no intervalo entre pacotes */
+    float    wind_gust_ms;  /* Rajada (máx. média de 3 s) no mesmo intervalo */
+
+    /* Pluviômetro basculante */
+    float    rain_total_mm; /* Acumulado desde o boot do nó (monotônico; cai = reboot) */
 
     /* Integridade */
     uint16_t crc16;
 } lora_packet_t;
 
-_Static_assert(sizeof(lora_packet_t) == 45, "lora_packet_t v2 deve ter 45 bytes");
+_Static_assert(sizeof(lora_packet_t) == 53, "lora_packet_t v3 deve ter 53 bytes");
 
 /* Tamanho do payload sem CRC (para cálculo do CRC) */
 #define LORA_PKT_CRC_OFFSET  (sizeof(lora_packet_t) - sizeof(uint16_t))

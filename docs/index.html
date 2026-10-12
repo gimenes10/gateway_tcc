@@ -2,485 +2,534 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Estação Meteorológica — UNIFESP ICT SJC</title>
-<meta name="description" content="Telemetria em tempo real da estação meteorológica IoT com enlace LoRa 915 MHz — UNIFESP ICT São José dos Campos.">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='7' fill='none' stroke='%2338bdf8' stroke-width='2.5'/></svg>">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Estação Meteorológica · UNIFESP ICT SJC</title>
+<meta name="description" content="Condições meteorológicas em tempo real no campus da UNIFESP ICT, São José dos Campos.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='6' fill='none' stroke='%231f6c9f' stroke-width='3'/></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;450;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/mqtt@5.15.2/dist/mqtt.min.js"></script>
 <style>
 :root{
-  --bg:#07080b;
-  --panel:#0c0e13;
-  --line:rgba(255,255,255,.07);
-  --line-hi:rgba(255,255,255,.14);
-  --tx:#eef1f6;
-  --tx2:#949dae;
-  --tx3:#5c6577;
-  --ok:#34d399;
-  --warn:#fbbf24;
-  --bad:#f87171;
-  --amb:#38bdf8;
-  --mono:'JetBrains Mono',ui-monospace,monospace;
+  --bg:#f7f6f3; --tx:#1b1b19; --tx2:#6f6e69; --tx3:#a3a29c;
+  --line:rgba(0,0,0,.08); --hover:rgba(0,0,0,.025);
+  --acc:#1f6c9f; --acc-soft:rgba(31,108,159,.12);
+  --ok:#346538; --warn:#956400; --bad:#9f2f2d;
+  --ease:cubic-bezier(.16,1,.3,1);
+  --sans:'Geist','Helvetica Neue',system-ui,sans-serif;
+  --mono:'Geist Mono',ui-monospace,'SF Mono',monospace;
+  color-scheme:light dark;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:#121211; --tx:#ecebe7; --tx2:#9a9993; --tx3:#5f5e5a;
+    --line:rgba(255,255,255,.08); --hover:rgba(255,255,255,.03);
+    --acc:#7cc0ec; --acc-soft:rgba(124,192,236,.14);
+    --ok:#8fc495; --warn:#e3b45c; --bad:#ef8a86;
+  }
 }
 *{margin:0;padding:0;box-sizing:border-box}
+[hidden]{display:none!important}
 html{-webkit-text-size-adjust:100%}
-body{
-  background:var(--bg);color:var(--tx);
-  font-family:'Inter',system-ui,-apple-system,sans-serif;
-  font-feature-settings:"cv05","ss01";
-  min-height:100vh;line-height:1.5;
-  -webkit-font-smoothing:antialiased;
-}
-body::before{
-  content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
-  background:
-    radial-gradient(60vw 42vh at 15% -8%, color-mix(in srgb, var(--amb) 16%, transparent), transparent 70%),
-    radial-gradient(50vw 38vh at 92% 4%, color-mix(in srgb, var(--amb) 8%, transparent), transparent 70%);
-  transition:background 1.2s ease;
-}
-.wrap{position:relative;z-index:1;max-width:1060px;margin:0 auto;padding:0 24px}
+body{background:var(--bg);color:var(--tx);font:400 15px/1.6 var(--sans);
+  -webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums;
+  padding-bottom:env(safe-area-inset-bottom,0px)}
+::selection{background:var(--acc-soft);color:var(--tx)}
+button{font:inherit;color:inherit;background:none;border:0;text-align:left;cursor:pointer}
+:focus-visible{outline:2px solid var(--acc);outline-offset:3px;border-radius:4px}
+.wrap{max-width:1040px;margin:0 auto;padding:0 28px}
+.muted{color:var(--tx2)}
 
-/* ---------- header ---------- */
-header{
-  position:sticky;top:0;z-index:10;
-  background:color-mix(in srgb, var(--bg) 82%, transparent);
-  backdrop-filter:blur(18px) saturate(140%);
-  border-bottom:1px solid var(--line);
-}
-.hd{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px 0}
-.brand{display:flex;align-items:center;gap:11px;min-width:0}
-.mark{width:30px;height:30px;border-radius:9px;flex-shrink:0;display:grid;place-items:center;
-  background:color-mix(in srgb, var(--amb) 14%, transparent);
-  border:1px solid color-mix(in srgb, var(--amb) 26%, transparent);transition:.8s}
-.mark svg{width:15px;height:15px;stroke:var(--amb);fill:none;stroke-width:1.8;stroke-linecap:round;transition:.8s}
-.brand h1{font-size:14.5px;font-weight:550;letter-spacing:-.01em;white-space:nowrap}
-.brand p{font-size:11.5px;color:var(--tx3);letter-spacing:.01em}
-.status{display:flex;align-items:center;gap:8px;font-size:11.5px;font-family:var(--mono);color:var(--tx2);white-space:nowrap}
-.dot{width:6px;height:6px;border-radius:50%;background:var(--tx3);transition:.3s;flex-shrink:0}
-.dot.on{background:var(--ok);box-shadow:0 0 0 3px color-mix(in srgb,var(--ok) 18%,transparent)}
-.dot.wait{background:var(--warn);animation:blink 1.4s ease-in-out infinite}
-.dot.off{background:var(--bad);box-shadow:0 0 0 3px color-mix(in srgb,var(--bad) 18%,transparent)}
-@keyframes blink{0%,100%{opacity:1}50%{opacity:.25}}
-.sep{color:var(--line-hi)}
+/* ---------- topo ---------- */
+.top{position:sticky;top:0;z-index:5;padding-top:env(safe-area-inset-top,0px);
+  background:color-mix(in srgb,var(--bg) 86%,transparent);backdrop-filter:blur(14px)}
+.bar{display:flex;align-items:center;justify-content:space-between;gap:16px;height:58px}
+.brand{display:flex;align-items:baseline;gap:12px;min-width:0;white-space:nowrap}
+.brand strong{font-weight:500;font-size:14.5px;letter-spacing:-.01em}
+.brand span{font-size:13px;color:var(--tx2);overflow:hidden;text-overflow:ellipsis}
+.live{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--tx2);white-space:nowrap}
+.live b{font-weight:500;color:var(--tx)}
+.dot{position:relative;width:7px;height:7px;border-radius:50%;background:var(--tx3);transition:background .3s}
+.dot[data-s=live]{background:var(--ok)}
+.dot[data-s=wait]{background:var(--warn);animation:blink 1.4s ease-in-out infinite}
+.dot[data-s=off]{background:var(--bad)}
+.dot::after{content:'';position:absolute;inset:0;border-radius:50%;background:inherit;opacity:0}
+.dot.ping::after{animation:ping .9s var(--ease)}
+.fresh{height:1px;background:var(--line);overflow:hidden}
+.fresh i{display:block;height:100%;background:var(--acc);transform-origin:left;transform:scaleX(0)}
+.fresh i.late{background:var(--warn);transition:none!important;transform:scaleX(1)!important;opacity:.6}
+@keyframes blink{50%{opacity:.3}}
+@keyframes ping{from{transform:scale(1);opacity:.55}to{transform:scale(3.4);opacity:0}}
 
-/* ---------- hero ---------- */
-.hero{display:flex;align-items:flex-end;justify-content:space-between;gap:32px;padding:52px 0 44px;flex-wrap:wrap}
-.hero-main{display:flex;align-items:flex-start;gap:22px}
-.glyph{width:46px;height:46px;stroke:var(--amb);fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0;margin-top:12px;transition:.6s}
-.temp{font-size:clamp(64px,13vw,104px);font-weight:450;letter-spacing:-.055em;line-height:.88;font-variant-numeric:tabular-nums}
-.temp .u{font-size:.32em;font-weight:400;letter-spacing:-.01em;color:var(--tx3);margin-left:.06em;vertical-align:.55em}
-.cond{font-size:16px;color:var(--tx);margin-top:10px;font-weight:450}
-.cond span{color:var(--tx2);font-weight:400}
-.loc{font-size:11.5px;color:var(--tx3);margin-top:5px;font-family:var(--mono)}
-.hero-chart{flex:1;min-width:220px;max-width:340px}
-.hero-chart .lbl{display:flex;justify-content:space-between;font-size:10px;font-family:var(--mono);
-  color:var(--tx3);text-transform:uppercase;letter-spacing:.09em;margin-bottom:8px}
-.hero-chart svg{width:100%;height:64px;display:block}
+/* ---------- agora ---------- */
+.now{display:grid;grid-template-columns:auto 1fr;align-items:end;gap:24px 56px;padding:64px 0 48px}
+.metric{position:relative;display:block;width:100%;padding-top:14px;border-top:1px solid var(--line);
+  transition:background .2s}
+.metric::before{content:'';position:absolute;left:0;right:0;top:-1px;height:2px;background:var(--acc);
+  transform:scaleX(0);transform-origin:left;transition:transform .45s var(--ease)}
+.metric[aria-pressed=true]::before{transform:scaleX(1)}
+.metric:hover{background:var(--hover)}
+.hero{display:flex;align-items:flex-start;gap:18px;padding-right:12px}
+.glyph{width:40px;height:40px;margin-top:14px;flex-shrink:0;fill:none;stroke:var(--tx2);
+  stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.temp{font-weight:300;font-size:clamp(68px,12vw,96px);line-height:1;letter-spacing:-.04em;white-space:nowrap}
+.temp .u{font-size:.3em;font-weight:400;letter-spacing:0;color:var(--tx2);vertical-align:.95em;margin-left:.08em}
+.cond{padding-bottom:6px}
+.cond h1{font-size:clamp(22px,3vw,28px);font-weight:400;letter-spacing:-.02em;line-height:1.2;text-wrap:balance}
+.cond p{margin-top:6px}
+.cond .range{margin-top:18px;font-size:13px;color:var(--tx2)}
+.range b{font-weight:500;color:var(--tx)}
 
-/* ---------- tiles ---------- */
-.grid{display:grid;gap:12px}
-.g4{grid-template-columns:repeat(4,1fr)}
-.g3{grid-template-columns:repeat(3,1fr);margin-top:12px}
-.card{
-  background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px 18px 16px;
-  transition:border-color .25s, transform .25s, background .25s;
-}
-.card:hover{border-color:var(--line-hi);transform:translateY(-2px)}
-.k{font-size:10px;font-family:var(--mono);color:var(--tx3);text-transform:uppercase;letter-spacing:.09em}
-.v{font-size:30px;font-weight:450;letter-spacing:-.035em;line-height:1;margin-top:12px;font-variant-numeric:tabular-nums}
-.v .u{font-size:.44em;font-weight:400;color:var(--tx3);letter-spacing:0;margin-left:2px}
-.sub{font-size:11.5px;color:var(--tx2);margin-top:7px;min-height:17px}
-.tile svg{width:100%;height:26px;display:block;margin-top:12px;opacity:.9}
+/* ---------- leituras ---------- */
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:0 28px}
+.rd{padding:14px 12px 22px 0;min-height:118px}
+.lbl{display:block;font-size:13px;color:var(--tx2);transition:color .2s}
+.rd[aria-pressed=true] .lbl,.metric[aria-pressed=true] .lbl{color:var(--acc)}
+.val{display:block;margin-top:8px;font-size:32px;font-weight:400;letter-spacing:-.03em;line-height:1.1;white-space:nowrap}
+.val .u{font-size:14px;letter-spacing:0;color:var(--tx2);margin-left:4px}
+.sub{display:block;margin-top:6px;font-size:13px;color:var(--tx2);min-height:21px}
+.lvl::before{content:'';display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:10px;
+  vertical-align:.2em;background:var(--c)}
+.lvl[data-l=ok]{--c:var(--ok)}
+.lvl[data-l=warn]{--c:var(--warn)}
+.lvl[data-l=bad]{--c:var(--bad);color:var(--bad)}
+.in{animation:rise .7s var(--ease) both;animation-delay:calc(var(--i,0) * 60ms)}
+@keyframes rise{from{opacity:0;transform:translateY(8px)}}
 
-/* ---------- meters (ar) ---------- */
-.meter{margin-top:14px}
-.meter+.meter{margin-top:12px}
-.meter-hd{display:flex;justify-content:space-between;align-items:baseline;font-size:12px;color:var(--tx2)}
-.meter-hd b{font-weight:500;color:var(--tx);font-family:var(--mono);font-size:13px;font-variant-numeric:tabular-nums}
-.meter-hd b i{font-style:normal;color:var(--tx3);font-size:.8em}
-.track{height:4px;border-radius:99px;background:rgba(255,255,255,.07);margin-top:7px;overflow:hidden}
-.fill{height:100%;border-radius:99px;width:0;background:var(--tx2);transition:width .6s cubic-bezier(.4,0,.2,1),background .4s}
+/* ---------- gráfico ---------- */
+.chart{margin-top:48px;padding-top:18px;border-top:1px solid var(--line)}
+.ch-hd{display:flex;justify-content:space-between;align-items:baseline;gap:16px}
+.ch-hd h2{font-size:15px;font-weight:500;letter-spacing:-.01em}
+.ch-hd span{font:13px var(--mono);color:var(--tx2)}
+.plot{position:relative;height:220px;margin-top:22px;touch-action:pan-y;cursor:crosshair}
+.plot svg{display:block;width:100%;height:100%;overflow:visible}
+.plot svg.reveal{animation:wipe .9s var(--ease)}
+@keyframes wipe{from{clip-path:inset(0 100% 0 0)}to{clip-path:inset(0 0 0 0)}}
+#line{fill:none;stroke:var(--acc);stroke-width:1.6;stroke-linejoin:round;stroke-linecap:round;vector-effect:non-scaling-stroke}
+#area{fill:url(#fade);stroke:none}
+.grid-y{stroke:var(--line);stroke-width:1;vector-effect:non-scaling-stroke}
+.pt{position:absolute;width:7px;height:7px;margin:-3.5px 0 0 -3.5px;border-radius:50%;background:var(--acc);pointer-events:none}
+.pt::after{content:'';position:absolute;inset:0;border-radius:50%;background:var(--acc);opacity:0}
+.pt.ping::after{animation:ping 1s var(--ease)}
+.cross{position:absolute;top:0;bottom:0;left:0;width:1px;background:var(--tx3);opacity:0;pointer-events:none;
+  transition:opacity .15s}
+.cross.on{opacity:1}
+.cross .pt{left:0;background:var(--tx)}
+.tip{position:absolute;top:-6px;left:10px;transform:translateY(-100%);font:12.5px var(--mono);white-space:nowrap;
+  background:var(--bg);padding:2px 0}
+.cross.flip .tip{left:auto;right:10px}
+.empty{position:absolute;inset:0;display:grid;place-items:center;font-size:13px;color:var(--tx3)}
+.axis{display:flex;justify-content:space-between;margin-top:12px;font:12px var(--mono);color:var(--tx3)}
 
-/* ---------- pill ---------- */
-.pill{display:inline-flex;align-items:center;gap:8px;margin-top:14px;padding:8px 14px 8px 12px;
-  border-radius:99px;font-size:13px;font-weight:450;border:1px solid var(--line);
-  background:rgba(255,255,255,.03);color:var(--tx2);transition:.35s}
-.pill .pd{width:6px;height:6px;border-radius:50%;background:var(--tx3);flex-shrink:0;transition:.35s}
-.pill.ok{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 24%,transparent);background:color-mix(in srgb,var(--ok) 8%,transparent)}
-.pill.ok .pd{background:var(--ok);box-shadow:0 0 8px var(--ok)}
-.pill.alert{color:var(--bad);border-color:color-mix(in srgb,var(--bad) 32%,transparent);background:color-mix(in srgb,var(--bad) 9%,transparent)}
-.pill.alert .pd{background:var(--bad);box-shadow:0 0 8px var(--bad);animation:blink .9s infinite}
-.card.alert{border-color:color-mix(in srgb,var(--bad) 34%,transparent)}
-
-/* ---------- link lora ---------- */
-.duo{display:flex;gap:26px;margin-top:12px}
-.duo .v{margin-top:4px;font-size:26px}
-.bars{display:flex;align-items:flex-end;gap:3px;height:22px;margin-top:12px}
-.bars i{width:4px;border-radius:2px;background:rgba(255,255,255,.1);transition:background .4s}
-
-footer{border-top:1px solid var(--line);margin-top:56px;padding:26px 0 34px;
-  font-size:11.5px;color:var(--tx3);line-height:1.9;font-family:var(--mono)}
-footer a{color:var(--tx2);text-decoration:none;border-bottom:1px solid var(--line-hi)}
-footer a:hover{color:var(--amb);border-color:var(--amb)}
+/* ---------- rodapé ---------- */
+footer{margin-top:72px;padding:22px 0 40px;border-top:1px solid var(--line);font-size:12.5px;color:var(--tx3);
+  display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px 24px}
+footer .mono{font-family:var(--mono)}
+footer a{color:var(--tx2);text-decoration:none;border-bottom:1px solid var(--line)}
+footer a:hover{color:var(--acc);border-color:var(--acc)}
 
 /* ---------- estados ---------- */
-.stale .hero-main,.stale .grid{opacity:.42;transition:opacity .6s}
-.loader{position:fixed;inset:0;z-index:100;background:var(--bg);display:grid;place-items:center;
-  gap:14px;grid-auto-flow:row;transition:opacity .6s}
-.loader.hid{opacity:0;pointer-events:none}
-.spin{width:26px;height:26px;border:2px solid var(--line-hi);border-top-color:var(--amb);
-  border-radius:50%;animation:spin .7s linear infinite;justify-self:center}
-@keyframes spin{to{transform:rotate(360deg)}}
-.loader p{font-size:12px;color:var(--tx3);font-family:var(--mono)}
+.na{color:var(--tx3)}
+body.stale .now,body.stale .grid{opacity:.45;transition:opacity .6s}
 
-@media(max-width:860px){.g4{grid-template-columns:repeat(2,1fr)}.g3{grid-template-columns:1fr}}
-@media(max-width:600px){
-  .wrap{padding:0 16px}
-  .hero{padding:34px 0 30px;gap:24px}
-  .hero-chart{max-width:none}
-  .brand p{display:none}
-  .glyph{width:34px;height:34px;margin-top:6px}
-  .v{font-size:26px}
+@media (max-width:760px){
+  .wrap{padding:0 18px}
+  .brand span{display:none}
+  .now{grid-template-columns:1fr;padding:40px 0 32px;gap:20px}
+  .grid{grid-template-columns:repeat(2,1fr);gap:0 18px}
+  .val{font-size:27px}
+  .plot{height:180px}
+  .glyph{width:32px;height:32px;margin-top:10px}
 }
-@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+@media (prefers-reduced-motion:reduce){
+  .in,.plot svg.reveal,.dot.ping::after,.pt.ping::after{animation:none}
+  .dot[data-s=wait]{animation:none}
+  .metric::before{transition:none}
+}
 </style>
 </head>
 <body>
 
-<div class="loader" id="loader">
-  <div class="spin"></div>
-  <p id="lo-msg">Conectando ao broker MQTT</p>
-</div>
-
-<header>
-  <div class="wrap hd">
-    <div class="brand">
-      <div class="mark" id="mark"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.5 1.5M17.6 17.6l1.5 1.5M19.1 4.9l-1.5 1.5M6.4 17.6l-1.5 1.5"/></svg></div>
-      <div>
-        <h1>Estação Meteorológica</h1>
-        <p>UNIFESP ICT · São José dos Campos</p>
-      </div>
-    </div>
-    <div class="status">
-      <span class="dot" id="dot"></span><span id="conn">conectando</span>
-      <span class="sep">/</span><span id="age">—</span>
-    </div>
+<header class="top">
+  <div class="wrap bar">
+    <div class="brand"><strong>Estação Meteorológica</strong><span>UNIFESP ICT · São José dos Campos</span></div>
+    <div class="live" role="status"><span class="dot" id="dot" data-s="wait"></span><b id="conn">Conectando</b><span id="age"></span></div>
   </div>
+  <div class="fresh" id="fresh-bar"><i id="fresh"></i></div>
 </header>
 
-<main class="wrap" id="main">
-
-  <section class="hero">
-    <div class="hero-main">
-      <svg class="glyph" id="glyph" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.5 1.5M17.6 17.6l1.5 1.5M19.1 4.9l-1.5 1.5M6.4 17.6l-1.5 1.5"/></svg>
-      <div>
-        <div class="temp" id="temp">--<span class="u">°C</span></div>
-        <div class="cond" id="cond">Aguardando primeira leitura</div>
-        <div class="loc">Parque Tecnológico · 23,2°S 45,9°O</div>
-      </div>
-    </div>
-    <div class="hero-chart">
-      <div class="lbl"><span>Temperatura</span><span id="temp-range">—</span></div>
-      <svg id="temp-chart" viewBox="0 0 100 40" preserveAspectRatio="none"></svg>
+<main class="wrap">
+  <section class="now">
+    <button class="metric hero" data-k="t" aria-pressed="true" aria-label="Histórico de temperatura">
+      <svg class="glyph" id="glyph" viewBox="0 0 24 24" aria-hidden="true"></svg>
+      <span class="temp"><span id="v-t" class="na">—</span><span class="u">°C</span></span>
+    </button>
+    <div class="cond">
+      <h1 id="cond">Aguardando a primeira leitura</h1>
+      <p class="muted" id="cond-sub"></p>
+      <p class="range" id="range"></p>
     </div>
   </section>
 
-  <section class="grid g4">
-    <div class="card tile">
-      <div class="k">Umidade relativa</div>
-      <div class="v" id="hum">--<span class="u">%</span></div>
-      <div class="sub" id="hum-sub"></div>
-      <svg id="sp-hum" viewBox="0 0 100 26" preserveAspectRatio="none"></svg>
-    </div>
-    <div class="card tile">
-      <div class="k">Pressão atmosférica</div>
-      <div class="v" id="pre">--<span class="u">hPa</span></div>
-      <div class="sub" id="pre-sub"></div>
-      <svg id="sp-pre" viewBox="0 0 100 26" preserveAspectRatio="none"></svg>
-    </div>
-    <div class="card tile">
-      <div class="k">Luminosidade</div>
-      <div class="v" id="lux">--<span class="u">lux</span></div>
-      <div class="sub" id="lux-sub"></div>
-      <svg id="sp-lux" viewBox="0 0 100 26" preserveAspectRatio="none"></svg>
-    </div>
-    <div class="card tile" id="wind-card">
-      <div class="k">Vento</div>
-      <div class="v" id="wind">--<span class="u">m/s</span></div>
-      <div class="sub" id="wind-sub">Anemômetro em instalação</div>
-      <svg id="sp-wind" viewBox="0 0 100 26" preserveAspectRatio="none"></svg>
-    </div>
+  <section class="grid" aria-label="Leituras">
+    <button class="metric rd" data-k="h" aria-pressed="false" style="--i:0">
+      <span class="lbl">Umidade</span>
+      <span class="val"><span id="v-h" class="na">—</span><span class="u">%</span></span>
+      <span class="sub"></span>
+    </button>
+    <button class="metric rd" data-k="p" aria-pressed="false" style="--i:1">
+      <span class="lbl">Pressão</span>
+      <span class="val"><span id="v-p" class="na">—</span><span class="u">hPa</span></span>
+      <span class="sub" id="s-p"></span>
+    </button>
+    <button class="metric rd" data-k="l" aria-pressed="false" style="--i:2">
+      <span class="lbl">Luminosidade</span>
+      <span class="val"><span id="v-l" class="na">—</span><span class="u">lux</span></span>
+      <span class="sub"></span>
+    </button>
+    <button class="metric rd" data-k="w" aria-pressed="false" style="--i:3" id="i-w" hidden>
+      <span class="lbl">Vento</span>
+      <span class="val"><span id="v-w" class="na">—</span><span class="u">km/h</span></span>
+      <span class="sub"></span>
+    </button>
+    <button class="metric rd" data-k="co" aria-pressed="false" style="--i:4">
+      <span class="lbl">Monóxido de carbono</span>
+      <span class="val"><span id="v-co" class="na">—</span></span>
+      <span class="sub" id="s-co"></span>
+    </button>
+    <button class="metric rd" data-k="g" aria-pressed="false" style="--i:5">
+      <span class="lbl">Gases combustíveis</span>
+      <span class="val"><span id="v-g" class="na">—</span></span>
+      <span class="sub" id="s-g"></span>
+    </button>
   </section>
 
-  <section class="grid g3">
-    <div class="card">
-      <div class="k">Qualidade do ar</div>
-      <div class="meter">
-        <div class="meter-hd"><span>Monóxido de carbono</span><b id="mq7">--<i>V</i></b></div>
-        <div class="track"><div class="fill" id="mq7-bar"></div></div>
-      </div>
-      <div class="meter">
-        <div class="meter-hd"><span>Gases combustíveis</span><b id="mq2">--<i>V</i></b></div>
-        <div class="track"><div class="fill" id="mq2-bar"></div></div>
-      </div>
-      <div class="sub" style="margin-top:14px">MQ-7 e MQ-2 · tensão relativa, 0–3,3 V</div>
+  <section class="chart" aria-live="off">
+    <div class="ch-hd"><h2 id="ch-title">Temperatura</h2><span id="ch-range"></span></div>
+    <div class="plot" id="plot">
+      <svg id="svg" viewBox="0 0 1000 220" preserveAspectRatio="none" role="img" aria-labelledby="ch-title">
+        <defs><linearGradient id="fade" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="var(--acc)" stop-opacity=".16"/><stop offset="1" stop-color="var(--acc)" stop-opacity="0"/>
+        </linearGradient></defs>
+        <line class="grid-y" x1="0" x2="1000" y1="110" y2="110"/>
+        <path id="area"/><path id="line"/>
+      </svg>
+      <span class="pt" id="last" hidden></span>
+      <div class="cross" id="cross"><span class="pt" id="cross-pt"></span><span class="tip" id="tip"></span></div>
+      <p class="empty" id="empty">Coletando dados para o gráfico</p>
     </div>
-
-    <div class="card" id="rain-card">
-      <div class="k">Precipitação</div>
-      <div class="pill" id="rain-pill"><span class="pd"></span><span id="rain-txt">Sem leitura</span></div>
-      <div class="sub" id="rain-sub" style="margin-top:14px">Sensor FC-22</div>
-    </div>
-
-    <div class="card">
-      <div class="k">Enlace LoRa 915 MHz</div>
-      <div class="duo">
-        <div>
-          <div class="k">RSSI</div>
-          <div class="v" id="rssi">--<span class="u">dBm</span></div>
-        </div>
-        <div>
-          <div class="k">SNR</div>
-          <div class="v" id="snr">--<span class="u">dB</span></div>
-        </div>
-        <div>
-          <div class="k">Sinal</div>
-          <div class="bars" id="bars"><i style="height:5px"></i><i style="height:9px"></i><i style="height:13px"></i><i style="height:17px"></i><i style="height:21px"></i></div>
-        </div>
-      </div>
-      <div class="sub" id="pkts" style="margin-top:14px">Nenhum pacote recebido</div>
-    </div>
+    <div class="axis"><span id="ax0"></span><span id="ax1"></span><span id="ax2"></span></div>
   </section>
 
   <footer>
-    Estação Meteorológica IoT Autossuficiente com Comunicação LoRa · TCC 2026<br>
-    Guilherme Gimenes · UNIFESP ICT · <a href="https://github.com/gimenes10/gateway_tcc" target="_blank" rel="noopener">github.com/gimenes10/gateway_tcc</a>
+    <span class="mono">LoRa 915 MHz · RSSI <span id="rssi">—</span> · SNR <span id="snr">—</span></span>
+    <span>Sensores de gás não calibrados: nível relativo.</span>
+    <span>TCC 2026 · Guilherme Gimenes · <a href="https://github.com/gimenes10/gateway_tcc" target="_blank" rel="noopener">código-fonte</a></span>
   </footer>
 </main>
 
 <script>
-(function(){
+(() => {
 'use strict';
 
-var MH='9d10239851aa4a5fa45c7a5e8b7bdebd.s1.eu.hivemq.cloud',
-    MP='8884', MU='webviewer', MW='12345678', MT='estacao/sjc/dados';
-/* Credencial somente-leitura (Subscribe) no tópico acima — exposta de propósito:
-   o navegador conecta direto ao broker, então qualquer credencial daqui é pública.
+/* Credencial somente-leitura (subscribe) — pública por design: o navegador conecta direto ao broker.
    Publicação usa outro usuário, definido em components/board_config/include/credentials.h */
+const MH = '9d10239851aa4a5fa45c7a5e8b7bdebd.s1.eu.hivemq.cloud', MP = 8884,
+      MU = 'webviewer', MW = '12345678', MT = 'estacao/sjc/dados';
 
-var HMAX=40, STALE_MS=120000;
-var hist={t:[],h:[],p:[],l:[],w:[]};
-var pkts=0, lastAt=0;
-var $=function(id){return document.getElementById(id)};
-
-/* ---------- valores ausentes ----------
-   O gateway publica null quando o sensor falhou ou não está instalado. */
-function has(v){ return typeof v==='number' && isFinite(v); }
-
-/* ---------- formatação pt-BR ---------- */
-function num(v,d){ return v.toFixed(d).replace('.',','); }
-function val(el,v,d,unit){
-  $(el).innerHTML=(has(v)?num(v,d):'--')+'<span class="u">'+unit+'</span>';
-}
-
-/* ---------- sparkline suave ---------- */
-function curve(pts){
-  if(pts.length<2) return '';
-  var d='M'+pts[0][0].toFixed(2)+' '+pts[0][1].toFixed(2);
-  for(var i=0;i<pts.length-1;i++){
-    var a=pts[i], b=pts[i+1];
-    d+=' Q'+a[0].toFixed(2)+' '+a[1].toFixed(2)+' '+((a[0]+b[0])/2).toFixed(2)+' '+((a[1]+b[1])/2).toFixed(2);
-  }
-  var last=pts[pts.length-1];
-  return d+' L'+last[0].toFixed(2)+' '+last[1].toFixed(2);
-}
-function spark(id,arr,color,h,fill){
-  var el=$(id); if(!el) return;
-  if(arr.length<2){ el.innerHTML=''; return; }
-  var mn=Math.min.apply(null,arr), mx=Math.max.apply(null,arr), rng=(mx-mn)||1;
-  var pad=3, W=100, top=pad, bot=h-pad;
-  var pts=arr.map(function(v,i){
-    return [ i/(arr.length-1)*W, bot-((v-mn)/rng)*(bot-top) ];
-  });
-  var d=curve(pts), gid='grad-'+id, last=pts[pts.length-1];
-  var svg='<defs><linearGradient id="'+gid+'" x1="0" y1="0" x2="0" y2="1">'+
-          '<stop offset="0%" stop-color="'+color+'" stop-opacity=".28"/>'+
-          '<stop offset="100%" stop-color="'+color+'" stop-opacity="0"/></linearGradient></defs>';
-  if(fill) svg+='<path d="'+d+' L100 '+h+' L0 '+h+' Z" fill="url(#'+gid+')" stroke="none"/>';
-  svg+='<path d="'+d+'" fill="none" stroke="'+color+'" stroke-width="1.4" stroke-linecap="round" '+
-       'stroke-linejoin="round" vector-effect="non-scaling-stroke"/>';
-  svg+='<circle cx="'+last[0].toFixed(2)+'" cy="'+last[1].toFixed(2)+'" r="1.6" fill="'+color+'" '+
-       'vector-effect="non-scaling-stroke"/>';
-  el.innerHTML=svg;
-}
-function push(k,v){ if(!has(v)) return; var a=hist[k]; a.push(v); if(a.length>HMAX) a.shift(); }
-
-/* ---------- ícones de condição ---------- */
-var ICON={
-  sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.5 1.5M17.6 17.6l1.5 1.5M19.1 4.9l-1.5 1.5M6.4 17.6l-1.5 1.5"/>',
-  part:'<path d="M8 17a4.5 4.5 0 010-9 5.5 5.5 0 0110.4 2A3.6 3.6 0 0118 17z"/><path d="M6.5 6.5L5.4 5.4M12 3.5V2M18.6 5.4l-1.1 1.1"/>',
-  cloud:'<path d="M7 18a4.5 4.5 0 010-9 6 6 0 0111.3 1.8A3.8 3.8 0 0117.5 18z"/>',
-  rain:'<path d="M7 15a4.5 4.5 0 010-9 6 6 0 0111.3 1.8A3.8 3.8 0 0117.5 15z"/><path d="M8 18.5l-1 2.5M12 18.5l-1 2.5M16 18.5l-1 2.5"/>',
-  moon:'<path d="M20 14.5A8.5 8.5 0 019.5 4a8.5 8.5 0 1010.5 10.5z"/>'
+/* Ordem das colunas no histórico: [ts, ...K] */
+const K = ['t', 'h', 'p', 'l', 'w', 'co', 'g'];
+const M = {
+  t:  { f: 'temperatura', name: 'Temperatura',         u: '°C',   d: 1 },
+  h:  { f: 'umidade',     name: 'Umidade',             u: '%',    d: 0 },
+  p:  { f: 'pressao',     name: 'Pressão',             u: 'hPa',  d: 0 },
+  l:  { f: 'lux',         name: 'Luminosidade',        u: 'lux',  d: 0 },
+  w:  { f: 'vento_ms',    name: 'Vento',               u: 'km/h', d: 0, x: 3.6 },
+  co: { f: 'mq7_voltage', name: 'Monóxido de carbono', u: 'V',    d: 2 },
+  g:  { f: 'mq2_voltage', name: 'Gases combustíveis',  u: 'V',    d: 2 },
 };
-function cond(d){
-  if(d.chuva_status===1) return {i:'rain', t:'Chuva',                 c:'#60a5fa'};
-  if(!has(d.lux))        return {i:'cloud',t:'Sem leitura de luminosidade', c:'#8b93a5'};
-  if(d.lux>20000)        return {i:'sun',  t:'Céu limpo',             c:'#fbbf24'};
-  if(d.lux>3000)         return {i:'part', t:'Parcialmente nublado',  c:'#38bdf8'};
-  if(d.lux>300)          return {i:'cloud',t:'Nublado',               c:'#94a3b8'};
-  if(d.lux>15)           return {i:'cloud',t:'Encoberto',             c:'#8b93a5'};
-  return                        {i:'moon', t:'Noite',                 c:'#818cf8'};
-}
-function luxTxt(l){
-  if(l>50000) return 'Sol a pino';
-  if(l>10000) return 'Luz solar plena';
-  if(l>1000)  return 'Céu difuso';
-  if(l>200)   return 'Baixa claridade';
-  if(l>15)    return 'Penumbra';
-  return 'Escuro';
-}
-/* ponto de orvalho — Magnus-Tetens */
-function dew(t,rh){
-  var a=17.62,b=243.12,g=Math.log(Math.max(rh,1)/100)+(a*t)/(b+t);
-  return (b*g)/(a-g);
-}
-/* sensação térmica — índice de calor de Rothfusz (válido acima de ~27 °C) */
-function heat(t,rh){
-  if(t<27||rh<40) return t;
-  var f=t*1.8+32;
-  var hi=-42.379+2.04901523*f+10.14333127*rh-0.22475541*f*rh
-         -0.00683783*f*f-0.05481717*rh*rh+0.00122874*f*f*rh
-         +0.00085282*f*rh*rh-0.00000199*f*f*rh*rh;
-  return (hi-32)/1.8;
-}
-/* tendência barométrica sobre a janela do histórico */
-function trend(){
-  var a=hist.p; if(a.length<6) return 'Acompanhando tendência';
-  var d=a[a.length-1]-a[0];
-  if(d>0.6)  return 'Em elevação · +'+num(d,1)+' hPa';
-  if(d<-0.6) return 'Em queda · '+num(d,1)+' hPa';
-  return 'Estável';
-}
+const COL = k => K.indexOf(k) + 1;
+const DAY = 864e5, STORE = 'estacao-sjc:hist:v1', MAX_ROWS = 4000, PLOT_N = 360, W = 1000, H = 220;
 
-/* ---------- atualização ---------- */
-function update(d){
-  pkts++; lastAt=Date.now();
-  document.body.classList.remove('stale');
+const $ = id => document.getElementById(id);
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const has = v => typeof v === 'number' && isFinite(v);
+const nf = {};
+const fmt = (v, d) => (nf[d] ||= new Intl.NumberFormat('pt-BR',
+  { minimumFractionDigits: d, maximumFractionDigits: d })).format(v).replace('-', '−');
+const hhmm = ts => new Date(ts).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+const restart = (el, cls) => { el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); };
 
-  var c=cond(d);
-  document.documentElement.style.setProperty('--amb',c.c);
-  var path=ICON[c.i];
-  $('glyph').innerHTML=path;
-  $('mark').querySelector('svg').innerHTML=path;
+let hist = load(), sel = 't', lastAt = 0, period = 0, mqttUp = false, geo = [];
 
-  /* temperatura */
-  var tOk=has(d.temperatura), hOk=has(d.umidade);
-  val('temp',d.temperatura,1,'°C');
-  var hi=(tOk&&hOk)?heat(d.temperatura,d.umidade):NaN;
-  $('cond').innerHTML=c.t+(has(hi)&&hi-d.temperatura>0.5?' <span>· sensação de '+num(hi,0)+' °C</span>':'')
-                     +(tOk?'':' <span>· temperatura indisponível</span>');
-  push('t',d.temperatura);
-  spark('temp-chart',hist.t,c.c,40,true);
-  if(hist.t.length>1){
-    $('temp-range').textContent=num(Math.min.apply(null,hist.t),1)+'° – '+num(Math.max.apply(null,hist.t),1)+'°';
+/* ---------- histórico (localStorage, 24 h) ---------- */
+function load() {
+  try {
+    const a = JSON.parse(localStorage.getItem(STORE) || '[]'), lim = Date.now() - DAY;
+    return Array.isArray(a) ? a.filter(r => Array.isArray(r) && r[0] > lim) : [];
+  } catch (e) { return []; }
+}
+function save() {
+  const lim = Date.now() - DAY;
+  while (hist.length && (hist[0][0] < lim || hist.length > MAX_ROWS)) hist.shift();
+  try { localStorage.setItem(STORE, JSON.stringify(hist)); } catch (e) { /* cota cheia: segue só em memória */ }
+}
+function estimatePeriod() {
+  const dt = [];
+  for (let i = Math.max(1, hist.length - 9); i < hist.length; i++) {
+    const v = hist[i][0] - hist[i - 1][0];
+    if (v > 0 && v < 6e5) dt.push(v);
   }
-
-  /* umidade */
-  val('hum',d.umidade,0,'%');
-  $('hum-sub').textContent=(tOk&&hOk)?'Ponto de orvalho '+num(dew(d.temperatura,d.umidade),1)+' °C':'Sem leitura';
-  push('h',d.umidade); spark('sp-hum',hist.h,'#60a5fa',26,true);
-
-  /* pressão */
-  val('pre',d.pressao,0,'hPa');
-  push('p',d.pressao);
-  $('pre-sub').textContent=has(d.pressao)?trend():'Sem leitura';
-  spark('sp-pre',hist.p,'#a78bfa',26,true);
-
-  /* luminosidade */
-  val('lux',d.lux,0,'lux');
-  $('lux-sub').textContent=has(d.lux)?luxTxt(d.lux):'Sem leitura';
-  push('l',d.lux); spark('sp-lux',hist.l,'#fbbf24',26,true);
-
-  /* vento (anemômetro — futuro) */
-  val('wind',d.vento_ms,1,'m/s');
-  $('wind-sub').textContent=has(d.vento_ms)?num(d.vento_ms*3.6,0)+' km/h':'Anemômetro em instalação';
-  push('w',d.vento_ms); spark('sp-wind',hist.w,'#2dd4bf',26,true);
-
-  /* qualidade do ar */
-  air('mq7',d.mq7_voltage); air('mq2',d.mq2_voltage);
-
-  /* precipitação */
-  var pill=$('rain-pill'), rOk=has(d.chuva_status), raining=d.chuva_status===1;
-  pill.className='pill '+(!rOk?'':raining?'alert':'ok');
-  $('rain-txt').textContent=!rOk?'Sem leitura':raining?'Chovendo':'Sem chuva';
-  $('rain-sub').textContent='FC-22 · '+(has(d.chuva_voltage)?num(d.chuva_voltage,2)+' V':'--');
-  $('rain-card').classList.toggle('alert',raining);
-
-  /* enlace */
-  val('rssi',d.rssi,0,'dBm'); val('snr',d.snr,0,'dB');
-  signal(d.rssi);
-  $('pkts').textContent=pkts+(pkts===1?' pacote recebido':' pacotes recebidos');
-
-  age();
+  if (!dt.length) return 0;
+  dt.sort((a, b) => a - b);
+  return dt[dt.length >> 1];
 }
-function air(id,v){
-  var bar=$(id+'-bar');
-  if(!has(v)){
-    $(id).innerHTML='--<i>V</i>';
-    bar.style.width='0'; return;
+
+/* ---------- números com transição ---------- */
+function setNum(el, v, d) {
+  cancelAnimationFrame(el._raf);
+  if (!has(v)) { el.textContent = '—'; el.classList.add('na'); el._v = undefined; return; }
+  const from = el._v;
+  el._v = v;
+  if (el.classList.contains('na')) { el.classList.remove('na'); restart(el.parentNode, 'in'); }
+  if (reduce || !has(from) || from === v) { el.textContent = fmt(v, d); return; }
+  const t0 = performance.now(), dur = 700;
+  const step = now => {
+    const k = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(2, -10 * k);
+    el.textContent = fmt(from + (v - from) * (k === 1 ? 1 : e), d);
+    if (k < 1) el._raf = requestAnimationFrame(step);
+  };
+  el._raf = requestAnimationFrame(step);
+}
+
+/* Limiares herdados do firmware/dashboard anterior (tensão relativa 0–3,3 V) */
+function gas(k, v) {
+  const el = $('v-' + k);
+  if (!has(v)) { el.textContent = '—'; el.className = 'na'; $('s-' + k).textContent = ''; return; }
+  const [l, t] = v > 2.2 ? ['bad', 'Alto'] : v > 1.4 ? ['warn', 'Elevado'] : ['ok', 'Normal'];
+  if (el.classList.contains('na')) restart(el.parentNode, 'in');
+  el.className = 'lvl'; el.dataset.l = l; el.textContent = t;
+  $('s-' + k).textContent = fmt(v, 2) + ' V';
+}
+
+function applyRow(r) {
+  K.forEach((k, i) => {
+    const v = r[i + 1];
+    if (k === 'co' || k === 'g') return gas(k, v);
+    setNum($('v-' + k), v, M[k].d);
+  });
+  $('i-w').hidden = !hist.some(x => has(x[COL('w')]));
+  $('s-p').textContent = pressureTrend();
+}
+
+/* ---------- condição do céu ---------- */
+const ICON = {
+  sun:   '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.5 1.5M17.6 17.6l1.5 1.5M19.1 4.9l-1.5 1.5M6.4 17.6l-1.5 1.5"/>',
+  part:  '<path d="M8 17a4.5 4.5 0 010-9 5.5 5.5 0 0110.4 2A3.6 3.6 0 0118 17z"/><path d="M6.5 6.5L5.4 5.4M12 3.5V2M18.6 5.4l-1.1 1.1"/>',
+  cloud: '<path d="M7 18a4.5 4.5 0 010-9 6 6 0 0111.3 1.8A3.8 3.8 0 0117.5 18z"/>',
+  rain:  '<path d="M7 15a4.5 4.5 0 010-9 6 6 0 0111.3 1.8A3.8 3.8 0 0117.5 15z"/><path d="M8 18.5l-1 2.5M12 18.5l-1 2.5M16 18.5l-1 2.5"/>',
+  moon:  '<path d="M20 14.5A8.5 8.5 0 019.5 4a8.5 8.5 0 1010.5 10.5z"/>',
+};
+function sky(d) {
+  if (d.chuva_status === 1) return ['rain', 'Chovendo agora'];
+  const l = d.lux;
+  if (!has(l))    return ['cloud', 'Céu indisponível'];
+  if (l > 20000)  return ['sun', 'Céu limpo'];
+  if (l > 3000)   return ['part', 'Parcialmente nublado'];
+  if (l > 300)    return ['cloud', 'Nublado'];
+  if (l > 15)     return ['cloud', 'Encoberto'];
+  return ['moon', 'Noite'];
+}
+/* Índice de calor (Rothfusz), só faz sentido acima de ~27 °C */
+function heat(t, rh) {
+  if (t < 27 || rh < 40) return NaN;
+  const f = t * 1.8 + 32;
+  const hi = -42.379 + 2.04901523 * f + 10.14333127 * rh - .22475541 * f * rh - .00683783 * f * f
+           - .05481717 * rh * rh + .00122874 * f * f * rh + .00085282 * f * rh * rh - .00000199 * f * f * rh * rh;
+  return (hi - 32) / 1.8;
+}
+function condition(d) {
+  const [ic, txt] = sky(d);
+  $('glyph').innerHTML = ICON[ic];
+  $('cond').textContent = txt;
+  const sub = [];
+  if (d.chuva_status === 0) sub.push('Sem chuva');
+  const hi = heat(d.temperatura, d.umidade);
+  if (has(hi) && hi - d.temperatura > .5) sub.push('Sensação de ' + fmt(hi, 0) + ' °C');
+  $('cond-sub').textContent = sub.join(' · ');
+}
+
+/* ---------- derivados do histórico ---------- */
+function tempRange() {
+  const c = COL('t'), r = hist.filter(x => has(x[c]));
+  if (r.length < 2) { $('range').textContent = ''; return; }
+  let mn = Infinity, mx = -Infinity;
+  for (const x of r) { mn = Math.min(mn, x[c]); mx = Math.max(mx, x[c]); }
+  const span = r[r.length - 1][0] - r[0][0];
+  $('range').innerHTML = 'Mín <b>' + fmt(mn, 1) + '°</b> · Máx <b>' + fmt(mx, 1) + '°</b> '
+    + (span > 23 * 36e5 ? 'nas últimas 24 h' : 'desde ' + hhmm(r[0][0]));
+}
+/* Tendência barométrica em janela de até 3 h */
+function pressureTrend() {
+  const c = COL('p'), r = hist.filter(x => has(x[c]));
+  if (r.length < 2) return '';
+  const last = r[r.length - 1], base = r.find(x => x[0] >= last[0] - 3 * 36e5);
+  const span = last[0] - base[0];
+  if (span < 45 * 6e4) return '';
+  const dv = last[c] - base[c], h = Math.max(1, Math.round(span / 36e5));
+  if (Math.abs(dv) < .5) return 'Estável em ' + h + ' h';
+  return (dv > 0 ? 'Subindo +' : 'Em queda ') + fmt(dv, 1) + ' hPa em ' + h + ' h';
+}
+
+/* ---------- gráfico ---------- */
+function drawChart(animate) {
+  const m = M[sel], c = COL(sel);
+  let pts = hist.filter(x => has(x[c])).map(x => [x[0], x[c]]);
+  $('ch-title').textContent = m.name;
+  const empty = pts.length < 2;
+  $('empty').hidden = !empty; $('last').hidden = empty;
+  if (empty) {
+    $('line').setAttribute('d', ''); $('area').setAttribute('d', '');
+    $('ch-range').textContent = ''; ['ax0', 'ax1', 'ax2'].forEach(i => $(i).textContent = '');
+    geo = []; return;
   }
-  var pct=Math.max(2,Math.min(100,(v/3.3)*100));
-  var col=v>2.2?'var(--bad)':v>1.4?'var(--warn)':'var(--ok)';
-  $(id).innerHTML=num(v,2)+'<i>V</i>';
-  bar.style.width=pct+'%'; bar.style.background=col;
-}
-function signal(r){
-  var lv=r>-60?5:r>-70?4:r>-80?3:r>-95?2:r>-110?1:0;
-  var col=lv>=4?'var(--ok)':lv>=2?'var(--warn)':'var(--bad)';
-  var bars=$('bars').children;
-  for(var i=0;i<bars.length;i++){
-    bars[i].style.background=i<lv?col:'rgba(255,255,255,.1)';
+  if (pts.length > PLOT_N) {
+    const b = Math.ceil(pts.length / PLOT_N), o = [];
+    for (let j = 0; j < pts.length; j += b) {
+      const s = pts.slice(j, j + b);
+      o.push([s[s.length - 1][0], s.reduce((a, p) => a + p[1], 0) / s.length]);
+    }
+    pts = o;
   }
+  let mn = Infinity, mx = -Infinity;
+  for (const p of pts) { mn = Math.min(mn, p[1]); mx = Math.max(mx, p[1]); }
+  const pad = (mx - mn) * .15 || Math.max(Math.abs(mx) * .01, .5), lo = mn - pad, hi = mx + pad;
+  const t0 = pts[0][0], t1 = pts[pts.length - 1][0], span = t1 - t0 || 1;
+  const X = t => (t - t0) / span * W, Y = v => H - (v - lo) / (hi - lo) * H;
+  const gap = Math.max(6e5, 5 * period);
+
+  let line = '', area = '', seg = [];
+  const flush = () => {
+    if (seg.length > 1) {
+      const s = seg.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join('');
+      line += s; area += s + 'L' + seg[seg.length - 1][0].toFixed(1) + ' ' + H + 'L' + seg[0][0].toFixed(1) + ' ' + H + 'Z';
+    }
+    seg = [];
+  };
+  geo = pts.map((p, i) => {
+    if (i && p[0] - pts[i - 1][0] > gap) flush();
+    const xy = [X(p[0]), Y(p[1])];
+    seg.push(xy);
+    return [xy[0] / W, xy[1] / H, p[0], p[1]];
+  });
+  flush();
+  $('line').setAttribute('d', line); $('area').setAttribute('d', area);
+
+  const g = geo[geo.length - 1], last = $('last');
+  last.style.left = g[0] * 100 + '%'; last.style.top = g[1] * 100 + '%';
+  $('ch-range').textContent = fmt(mn, m.d) + ' – ' + fmt(mx, m.d) + ' ' + m.u;
+  $('ax0').textContent = hhmm(t0); $('ax1').textContent = hhmm(t0 + span / 2); $('ax2').textContent = hhmm(t1);
+  if (animate && !reduce) restart($('svg'), 'reveal');
 }
 
-/* ---------- idade do dado ---------- */
-function age(){
-  if(!lastAt){ $('age').textContent='—'; return; }
-  var s=Math.round((Date.now()-lastAt)/1000);
-  $('age').textContent = s<60 ? 'há '+s+'s'
-                       : s<3600 ? 'há '+Math.floor(s/60)+'min'
-                       : 'há '+Math.floor(s/3600)+'h';
-  if(Date.now()-lastAt>STALE_MS){
-    document.body.classList.add('stale');
-    conn('off','sem dados');
-  }
-}
-setInterval(age,1000);
-
-/* ---------- conexão ---------- */
-function conn(state,txt){ $('dot').className='dot '+state; $('conn').textContent=txt; }
-
-var client=mqtt.connect('wss://'+MH+':'+MP+'/mqtt',
-  {username:MU,password:MW,protocol:'wss',reconnectPeriod:5000});
-
-client.on('connect',function(){
-  conn('on','online'); client.subscribe(MT);
-  $('loader').classList.add('hid');
+const plot = $('plot'), cross = $('cross');
+plot.addEventListener('pointermove', e => {
+  if (!geo.length) return;
+  const r = plot.getBoundingClientRect(), fx = (e.clientX - r.left) / r.width;
+  let best = geo[0];
+  for (const g of geo) if (Math.abs(g[0] - fx) < Math.abs(best[0] - fx)) best = g;
+  const m = M[sel];
+  cross.style.transform = 'translateX(' + best[0] * r.width + 'px)';
+  $('cross-pt').style.top = best[1] * 100 + '%';
+  $('tip').textContent = fmt(best[3], m.d) + ' ' + m.u + ' · ' + hhmm(best[2]);
+  cross.classList.toggle('flip', best[0] > .7);
+  cross.classList.add('on');
 });
-client.on('message',function(t,m){ try{ update(JSON.parse(m.toString())); }catch(e){} });
-client.on('error',   function(){ conn('off','erro de conexão'); });
-client.on('offline', function(){ conn('off','offline'); });
-client.on('reconnect',function(){ conn('wait','reconectando'); });
+plot.addEventListener('pointerleave', () => cross.classList.remove('on'));
 
-setTimeout(function(){
-  var l=$('loader');
-  if(!l.classList.contains('hid')) $('lo-msg').textContent='Aguardando dados do sensor';
-},5000);
-setTimeout(function(){ $('loader').classList.add('hid'); },9000);
+/* ---------- seleção de métrica ---------- */
+document.querySelectorAll('.metric').forEach(b => b.addEventListener('click', () => {
+  if (b.dataset.k === sel) return;
+  sel = b.dataset.k;
+  document.querySelectorAll('.metric').forEach(x => x.setAttribute('aria-pressed', x === b));
+  cross.classList.remove('on');
+  drawChart(true);
+}));
+
+/* ---------- conexão e frescor ---------- */
+function setConn(s, t) { $('dot').dataset.s = s; $('conn').textContent = t; }
+const staleMs = () => Math.max(12e4, 3 * period);
+
+function freshness() {
+  const bar = $('fresh');
+  bar.classList.remove('late');
+  if (!period || reduce) { bar.style.transform = 'scaleX(0)'; return; }
+  bar.style.transition = 'none'; bar.style.transform = 'scaleX(1)';
+  void bar.offsetWidth;
+  bar.style.transition = 'transform ' + period + 'ms linear';
+  bar.style.transform = 'scaleX(0)';
+  $('fresh-bar').title = 'Próxima leitura prevista em ~' + Math.round(period / 1000) + ' s';
+}
+
+function tick() {
+  if (!lastAt) { $('age').textContent = ''; return; }
+  const ms = Date.now() - lastAt, s = Math.round(ms / 1000);
+  $('age').textContent = s < 60 ? 'há ' + s + ' s' : s < 3600 ? 'há ' + Math.floor(s / 60) + ' min' : 'há ' + Math.floor(s / 3600) + ' h';
+  if (period && ms > period * 1.6) $('fresh').classList.add('late');
+  const stale = ms > staleMs();
+  document.body.classList.toggle('stale', stale);
+  if (stale && mqttUp) setConn('off', 'Sem dados');
+}
+setInterval(tick, 1000);
+
+/* ---------- pacote recebido ---------- */
+function update(d) {
+  const now = Date.now();
+  hist.push([now, ...K.map(k => {
+    const v = d[M[k].f];
+    return has(v) ? +(v * (M[k].x || 1)).toFixed(M[k].d + 1) : null;
+  })]);
+  save();
+  lastAt = now; period = estimatePeriod();
+
+  applyRow(hist[hist.length - 1]);
+  condition(d);
+  tempRange();
+  drawChart(false);
+
+  $('rssi').textContent = has(d.rssi) ? fmt(d.rssi, 0) + ' dBm' : '—';
+  $('snr').textContent = has(d.snr) ? fmt(d.snr, 0) + ' dB' : '—';
+
+  setConn('live', 'Ao vivo');
+  if (!reduce) { restart($('dot'), 'ping'); restart($('last'), 'ping'); }
+  freshness(); tick();
+}
+
+/* ---------- inicialização: último estado salvo ---------- */
+if (hist.length) {
+  const r = hist[hist.length - 1];
+  lastAt = r[0]; period = estimatePeriod();
+  applyRow(r); tempRange(); drawChart(true);
+  $('cond').textContent = 'Última leitura às ' + hhmm(r[0]);
+  tick();
+}
+
+if (typeof mqtt === 'undefined') { setConn('off', 'Falha ao carregar'); return; }
+const client = mqtt.connect('wss://' + MH + ':' + MP + '/mqtt',
+  { username: MU, password: MW, reconnectPeriod: 5000, connectTimeout: 10000 });
+client.on('connect', () => {
+  mqttUp = true; client.subscribe(MT);
+  if (!lastAt || Date.now() - lastAt > staleMs()) setConn('wait', 'Aguardando dados');
+  else setConn('live', 'Ao vivo');
+});
+client.on('message', (t, msg) => {
+  let d; try { d = JSON.parse(msg.toString()); } catch (e) { return; }
+  if (d && typeof d === 'object') update(d);
+});
+client.on('reconnect', () => setConn('wait', 'Reconectando'));
+client.on('offline', () => { mqttUp = false; setConn('off', 'Offline'); });
+client.on('error', () => setConn('off', 'Erro de conexão'));
 })();
 </script>
 </body>

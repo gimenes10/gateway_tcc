@@ -132,7 +132,8 @@ esp_err_t mqtt_publish_data(const lora_packet_t *pkt, int8_t rssi, int8_t snr)
     const bool mq7  = lora_packet_has(pkt, LORA_VALID_MQ7);
     const bool mq2  = lora_packet_has(pkt, LORA_VALID_MQ2);
     const bool rain = lora_packet_has(pkt, LORA_VALID_RAIN);
-    const bool wind = lora_packet_has(pkt, LORA_VALID_WIND);
+    const bool wind  = lora_packet_has(pkt, LORA_VALID_WIND);
+    const bool gauge = lora_packet_has(pkt, LORA_VALID_GAUGE);
 
     json_num(&j, "temperatura",   bme,  pkt->temperature_c, 2);
     json_num(&j, "umidade",       bme,  pkt->humidity_pct,  1);
@@ -145,7 +146,9 @@ esp_err_t mqtt_publish_data(const lora_packet_t *pkt, int8_t rssi, int8_t snr)
     json_num(&j, "chuva_raw",     rain, pkt->rain_raw,      0);
     json_num(&j, "chuva_voltage", rain, pkt->rain_voltage,  2);
     json_num(&j, "chuva_status",  rain, pkt->rain_status,   0);
-    json_num(&j, "vento_ms",      wind, pkt->wind_ms,       1);
+    json_num(&j, "vento_ms",        wind,  pkt->wind_avg_ms,   1);
+    json_num(&j, "vento_rajada_ms", wind,  pkt->wind_gust_ms,  1);
+    json_num(&j, "chuva_acum_mm",   gauge, pkt->rain_total_mm, 2);
     json_num(&j, "rssi",          true, rssi,               0);
     json_num(&j, "snr",           true, snr,                0);
 
