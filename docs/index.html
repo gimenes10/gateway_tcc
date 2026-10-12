@@ -3,254 +3,389 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Estação Meteorológica · UNIFESP ICT SJC</title>
-<meta name="description" content="Condições meteorológicas em tempo real no campus da UNIFESP ICT, São José dos Campos.">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='6' fill='none' stroke='%231f6c9f' stroke-width='3'/></svg>">
+<meta name="theme-color" content="#0b1730">
+<title>Estação Meteorológica UNIFESP · São José dos Campos</title>
+<meta name="description" content="Tempo agora no campus da UNIFESP ICT em São José dos Campos, medido pela estação IoT com enlace LoRa.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%231f5fa8'/><circle cx='16' cy='16' r='6' fill='%23fff'/></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@200;300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@phosphor-icons/web@2.1.2/src/light/style.css">
 <script src="https://cdn.jsdelivr.net/npm/mqtt@5.15.2/dist/mqtt.min.js"></script>
 <style>
+/* ---------- tokens ---------- */
+@property --s1 { syntax:'<color>';  inherits:true; initial-value:#0b1730; }
+@property --s2 { syntax:'<color>';  inherits:true; initial-value:#13234a; }
+@property --s3 { syntax:'<color>';  inherits:true; initial-value:#1d3360; }
+@property --cloud { syntax:'<number>'; inherits:true; initial-value:0; }
+@property --stars { syntax:'<number>'; inherits:true; initial-value:0; }
 :root{
-  --bg:#f7f6f3; --tx:#1b1b19; --tx2:#6f6e69; --tx3:#a3a29c;
-  --line:rgba(0,0,0,.08); --hover:rgba(0,0,0,.025);
-  --acc:#1f6c9f; --acc-soft:rgba(31,108,159,.12);
-  --ok:#346538; --warn:#956400; --bad:#9f2f2d;
-  --ease:cubic-bezier(.16,1,.3,1);
-  --sans:'Geist','Helvetica Neue',system-ui,sans-serif;
-  --mono:'Geist Mono',ui-monospace,'SF Mono',monospace;
-  color-scheme:light dark;
-}
-@media (prefers-color-scheme:dark){
-  :root{
-    --bg:#121211; --tx:#ecebe7; --tx2:#9a9993; --tx3:#5f5e5a;
-    --line:rgba(255,255,255,.08); --hover:rgba(255,255,255,.03);
-    --acc:#7cc0ec; --acc-soft:rgba(124,192,236,.14);
-    --ok:#8fc495; --warn:#e3b45c; --bad:#ef8a86;
-  }
+  --tx:#fff; --tx2:rgba(255,255,255,.74); --tx3:rgba(255,255,255,.52);
+  --tile:rgba(8,18,36,.34); --tile-hi:rgba(8,18,36,.44); --ring:rgba(255,255,255,.1);
+  --r:26px;
+  --ease:cubic-bezier(.32,.72,0,1);   /* gaveta / entrada */
+  --out:cubic-bezier(.23,1,.32,1);    /* feedback e valores */
+  --sans:'Geist','SF Pro Display',system-ui,sans-serif;
 }
 *{margin:0;padding:0;box-sizing:border-box}
 [hidden]{display:none!important}
-html{-webkit-text-size-adjust:100%}
-body{background:var(--bg);color:var(--tx);font:400 15px/1.6 var(--sans);
-  -webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums;
-  padding-bottom:env(safe-area-inset-bottom,0px)}
-::selection{background:var(--acc-soft);color:var(--tx)}
-button{font:inherit;color:inherit;background:none;border:0;text-align:left;cursor:pointer}
-:focus-visible{outline:2px solid var(--acc);outline-offset:3px;border-radius:4px}
-.wrap{max-width:1040px;margin:0 auto;padding:0 28px}
-.muted{color:var(--tx2)}
+html{background:#0b1730;-webkit-text-size-adjust:100%}
+body{min-height:100dvh;color:var(--tx);font:400 15px/1.5 var(--sans);font-variant-numeric:tabular-nums;
+  -webkit-font-smoothing:antialiased;padding-bottom:env(safe-area-inset-bottom,0px)}
+::selection{background:rgba(255,255,255,.25)}
+button{font:inherit;color:inherit;background:none;border:0;text-align:left}
+:focus-visible{outline:2px solid #fff;outline-offset:3px}
+.ph-light{line-height:1}
+
+/* ---------- céu dinâmico ---------- */
+.sky{position:fixed;inset:0;z-index:-1;overflow:hidden;pointer-events:none;
+  background:linear-gradient(180deg,var(--s1) 0%,var(--s2) 52%,var(--s3) 100%);
+  transition:--s1 2.4s var(--out),--s2 2.4s var(--out),--s3 2.4s var(--out),--cloud 3s var(--out),--stars 3s var(--out)}
+.stars{position:absolute;top:0;left:0;width:1px;height:1px;border-radius:50%;opacity:var(--stars)}
+.cloud{position:absolute;border-radius:50%;opacity:var(--cloud);
+  background:radial-gradient(closest-side,rgba(255,255,255,.55),rgba(255,255,255,.18) 55%,rgba(255,255,255,0));
+  animation:drift var(--d) cubic-bezier(.45,0,.55,1) infinite alternate}
+.cloud.a{width:70vw;height:26vw;top:4%;left:-18%;--d:70s}
+.cloud.b{width:55vw;height:22vw;top:26%;left:42%;--d:95s;animation-direction:alternate-reverse}
+.cloud.c{width:80vw;height:30vw;top:52%;left:-6%;--d:120s}
+@keyframes drift{to{transform:translateX(16vw)}}
+.drops{position:absolute;inset:0}
+.drops i{position:absolute;top:-12vh;width:1px;height:9vh;border-radius:1px;
+  background:linear-gradient(transparent,rgba(210,228,255,.55));
+  animation:fall var(--d) linear infinite;animation-delay:var(--w)}
+@keyframes fall{to{transform:translate3d(-6vh,124vh,0)}}
+.paused *{animation-play-state:paused!important}
 
 /* ---------- topo ---------- */
-.top{position:sticky;top:0;z-index:5;padding-top:env(safe-area-inset-top,0px);
-  background:color-mix(in srgb,var(--bg) 86%,transparent);backdrop-filter:blur(14px)}
-.bar{display:flex;align-items:center;justify-content:space-between;gap:16px;height:58px}
-.brand{display:flex;align-items:baseline;gap:12px;min-width:0;white-space:nowrap}
-.brand strong{font-weight:500;font-size:14.5px;letter-spacing:-.01em}
-.brand span{font-size:13px;color:var(--tx2);overflow:hidden;text-overflow:ellipsis}
-.live{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--tx2);white-space:nowrap}
-.live b{font-weight:500;color:var(--tx)}
-.dot{position:relative;width:7px;height:7px;border-radius:50%;background:var(--tx3);transition:background .3s}
-.dot[data-s=live]{background:var(--ok)}
-.dot[data-s=wait]{background:var(--warn);animation:blink 1.4s ease-in-out infinite}
-.dot[data-s=off]{background:var(--bad)}
+.nav{position:sticky;top:0;z-index:10;display:flex;justify-content:center;padding:calc(14px + env(safe-area-inset-top,0px)) 16px 0}
+.pill{display:flex;align-items:center;gap:22px;padding:9px 10px 9px 18px;border-radius:999px;
+  background:rgba(8,18,36,.36);box-shadow:inset 0 0 0 1px var(--ring);
+  backdrop-filter:blur(20px) saturate(140%);-webkit-backdrop-filter:blur(20px) saturate(140%);white-space:nowrap}
+.brand{font-weight:500;font-size:14px;letter-spacing:-.01em}
+.brand span{color:var(--tx3);font-weight:400;margin-left:8px}
+.live{display:flex;align-items:center;gap:8px;font-size:13px;padding:5px 12px;border-radius:999px;background:rgba(255,255,255,.07)}
+.live #age{color:var(--tx3)}
+.dot{position:relative;width:7px;height:7px;border-radius:50%;background:var(--tx3);transition:background .4s var(--out)}
+.dot[data-s=live]{background:#5fe08a}
+.dot[data-s=wait]{background:#ffc75a}
+.dot[data-s=off]{background:#ff7a6e}
 .dot::after{content:'';position:absolute;inset:0;border-radius:50%;background:inherit;opacity:0}
-.dot.ping::after{animation:ping .9s var(--ease)}
-.fresh{height:1px;background:var(--line);overflow:hidden}
-.fresh i{display:block;height:100%;background:var(--acc);transform-origin:left;transform:scaleX(0)}
-.fresh i.late{background:var(--warn);transition:none!important;transform:scaleX(1)!important;opacity:.6}
-@keyframes blink{50%{opacity:.3}}
-@keyframes ping{from{transform:scale(1);opacity:.55}to{transform:scale(3.4);opacity:0}}
+.dot.ping::after{animation:ping 1s var(--out)}
+@keyframes ping{from{transform:scale(1);opacity:.6}to{transform:scale(3.6);opacity:0}}
 
-/* ---------- agora ---------- */
-.now{display:grid;grid-template-columns:auto 1fr;align-items:end;gap:24px 56px;padding:64px 0 48px}
-.metric{position:relative;display:block;width:100%;padding-top:14px;border-top:1px solid var(--line);
-  transition:background .2s}
-.metric::before{content:'';position:absolute;left:0;right:0;top:-1px;height:2px;background:var(--acc);
-  transform:scaleX(0);transform-origin:left;transition:transform .45s var(--ease)}
-.metric[aria-pressed=true]::before{transform:scaleX(1)}
-.metric:hover{background:var(--hover)}
-.hero{display:flex;align-items:flex-start;gap:18px;padding-right:12px}
-.glyph{width:40px;height:40px;margin-top:14px;flex-shrink:0;fill:none;stroke:var(--tx2);
-  stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
-.temp{font-weight:300;font-size:clamp(68px,12vw,96px);line-height:1;letter-spacing:-.04em;white-space:nowrap}
-.temp .u{font-size:.3em;font-weight:400;letter-spacing:0;color:var(--tx2);vertical-align:.95em;margin-left:.08em}
-.cond{padding-bottom:6px}
-.cond h1{font-size:clamp(22px,3vw,28px);font-weight:400;letter-spacing:-.02em;line-height:1.2;text-wrap:balance}
-.cond p{margin-top:6px}
-.cond .range{margin-top:18px;font-size:13px;color:var(--tx2)}
-.range b{font-weight:500;color:var(--tx)}
+/* ---------- grade ---------- */
+.bento{display:grid;grid-template-columns:repeat(12,1fr);gap:14px;max-width:1180px;margin:0 auto;padding:40px 28px 0}
+.hero{grid-column:span 5;display:flex;flex-direction:column;justify-content:flex-end;padding:8px 8px 10px;min-height:300px}
+.c-chart{grid-column:span 7}
+.c3{grid-column:span 3}
+.c6{grid-column:span 6}
+.no-wind .c-rain{grid-column:span 6}
 
-/* ---------- leituras ---------- */
-.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:0 28px}
-.rd{padding:14px 12px 22px 0;min-height:118px}
-.lbl{display:block;font-size:13px;color:var(--tx2);transition:color .2s}
-.rd[aria-pressed=true] .lbl,.metric[aria-pressed=true] .lbl{color:var(--acc)}
-.val{display:block;margin-top:8px;font-size:32px;font-weight:400;letter-spacing:-.03em;line-height:1.1;white-space:nowrap}
-.val .u{font-size:14px;letter-spacing:0;color:var(--tx2);margin-left:4px}
-.sub{display:block;margin-top:6px;font-size:13px;color:var(--tx2);min-height:21px}
-.lvl::before{content:'';display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:10px;
-  vertical-align:.2em;background:var(--c)}
-.lvl[data-l=ok]{--c:var(--ok)}
-.lvl[data-l=warn]{--c:var(--warn)}
-.lvl[data-l=bad]{--c:var(--bad);color:var(--bad)}
-.in{animation:rise .7s var(--ease) both;animation-delay:calc(var(--i,0) * 60ms)}
-@keyframes rise{from{opacity:0;transform:translateY(8px)}}
+.enter{animation:enter .9s var(--ease) both;animation-delay:calc(var(--i,0) * 55ms)}
+@keyframes enter{from{opacity:0;transform:translateY(20px);filter:blur(8px)}}
 
-/* ---------- gráfico ---------- */
-.chart{margin-top:48px;padding-top:18px;border-top:1px solid var(--line)}
-.ch-hd{display:flex;justify-content:space-between;align-items:baseline;gap:16px}
-.ch-hd h2{font-size:15px;font-weight:500;letter-spacing:-.01em}
-.ch-hd span{font:13px var(--mono);color:var(--tx2)}
-.plot{position:relative;height:220px;margin-top:22px;touch-action:pan-y;cursor:crosshair}
-.plot svg{display:block;width:100%;height:100%;overflow:visible}
-.plot svg.reveal{animation:wipe .9s var(--ease)}
-@keyframes wipe{from{clip-path:inset(0 100% 0 0)}to{clip-path:inset(0 0 0 0)}}
-#line{fill:none;stroke:var(--acc);stroke-width:1.6;stroke-linejoin:round;stroke-linecap:round;vector-effect:non-scaling-stroke}
-#area{fill:url(#fade);stroke:none}
-.grid-y{stroke:var(--line);stroke-width:1;vector-effect:non-scaling-stroke}
-.pt{position:absolute;width:7px;height:7px;margin:-3.5px 0 0 -3.5px;border-radius:50%;background:var(--acc);pointer-events:none}
-.pt::after{content:'';position:absolute;inset:0;border-radius:50%;background:var(--acc);opacity:0}
-.pt.ping::after{animation:ping 1s var(--ease)}
-.cross{position:absolute;top:0;bottom:0;left:0;width:1px;background:var(--tx3);opacity:0;pointer-events:none;
-  transition:opacity .15s}
-.cross.on{opacity:1}
-.cross .pt{left:0;background:var(--tx)}
-.tip{position:absolute;top:-6px;left:10px;transform:translateY(-100%);font:12.5px var(--mono);white-space:nowrap;
-  background:var(--bg);padding:2px 0}
-.cross.flip .tip{left:auto;right:10px}
-.empty{position:absolute;inset:0;display:grid;place-items:center;font-size:13px;color:var(--tx3)}
-.axis{display:flex;justify-content:space-between;margin-top:12px;font:12px var(--mono);color:var(--tx3)}
-
-/* ---------- rodapé ---------- */
-footer{margin-top:72px;padding:22px 0 40px;border-top:1px solid var(--line);font-size:12.5px;color:var(--tx3);
-  display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px 24px}
-footer .mono{font-family:var(--mono)}
-footer a{color:var(--tx2);text-decoration:none;border-bottom:1px solid var(--line)}
-footer a:hover{color:var(--acc);border-color:var(--acc)}
-
-/* ---------- estados ---------- */
+.tile{position:relative;display:flex;flex-direction:column;min-height:176px;padding:18px 20px 18px;border-radius:var(--r);
+  background:var(--tile);box-shadow:inset 0 0 0 1px var(--ring),inset 0 1px 0 rgba(255,255,255,.1);overflow:hidden}
+button.tile,.gas{cursor:pointer;transition:transform .16s var(--out),background .25s var(--out)}
+button.tile:active,.gas:active{transform:scale(.98)}
+@media (hover:hover) and (pointer:fine){button.tile:hover{background:var(--tile-hi)}}
+.th{display:flex;align-items:center;gap:7px;font-size:12px;font-weight:500;letter-spacing:.05em;text-transform:uppercase;color:var(--tx3)}
+.th i{font-size:16px}
+.th .more{margin-left:auto;font-size:15px;opacity:0;transform:translateX(-4px);transition:opacity .2s var(--out),transform .2s var(--out)}
+@media (hover:hover) and (pointer:fine){button.tile:hover .more{opacity:1;transform:none}}
+.big{margin-top:14px;font-size:42px;font-weight:300;line-height:1;letter-spacing:-.035em;white-space:nowrap}
+.big small{font-size:17px;font-weight:400;letter-spacing:0;color:var(--tx2);margin-left:5px}
+.foot{margin-top:auto;padding-top:14px;font-size:14px;line-height:1.4;color:var(--tx2)}
 .na{color:var(--tx3)}
-body.stale .now,body.stale .grid{opacity:.45;transition:opacity .6s}
 
-@media (max-width:760px){
-  .wrap{padding:0 18px}
+/* hero */
+.temp{font-size:clamp(104px,12.5vw,152px);font-weight:200;line-height:.86;letter-spacing:-.065em;margin-left:-.04em}
+.temp sup{font-size:.42em;font-weight:200;color:var(--tx2);vertical-align:.95em;margin-left:.04em;letter-spacing:0}
+.cond{display:flex;align-items:center;gap:10px;margin-top:18px;font-size:24px;font-weight:400;letter-spacing:-.015em}
+.cond i{font-size:30px}
+.hilo{margin-top:6px;font-size:16px;color:var(--tx2)}
+.hilo b{font-weight:500;color:var(--tx)}
+
+/* gráfico */
+.chart-hd{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.chart-hd span:last-child{font-size:13px;color:var(--tx2);transition:opacity .15s var(--out)}
+.c-chart:has(.cross.on) #t-range{opacity:0}
+.plot{position:relative;flex:1;min-height:150px;margin-top:18px;touch-action:pan-y;cursor:crosshair}
+.plot svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.plot .line{fill:none;stroke-width:2.2;stroke-linejoin:round;stroke-linecap:round;vector-effect:non-scaling-stroke}
+.plot .base{stroke:rgba(255,255,255,.1);stroke-width:1;vector-effect:non-scaling-stroke;stroke-dasharray:3 4}
+.pt{position:absolute;width:9px;height:9px;margin:-4.5px 0 0 -4.5px;border-radius:50%;background:#fff;
+  box-shadow:0 0 0 3px rgba(255,255,255,.18);pointer-events:none}
+.pt.ping{animation:pulse 1.1s var(--out)}
+@keyframes pulse{40%{box-shadow:0 0 0 9px rgba(255,255,255,0)}}
+.cross{position:absolute;top:0;bottom:0;left:0;width:1px;background:rgba(255,255,255,.4);opacity:0;pointer-events:none;transition:opacity .15s var(--out)}
+.cross.on{opacity:1}
+.cross .pt{left:0;box-shadow:none}
+.tip{position:absolute;top:-8px;left:10px;transform:translateY(-100%);padding:4px 9px;border-radius:9px;font-size:12.5px;white-space:nowrap;
+  background:rgba(8,18,36,.75);box-shadow:inset 0 0 0 1px var(--ring)}
+.cross.flip .tip{left:auto;right:10px}
+.empty{position:absolute;inset:0;display:grid;place-items:center;text-align:center;font-size:14px;color:var(--tx3);padding:0 20px}
+.axis{display:flex;justify-content:space-between;margin-top:10px;font-size:12px;color:var(--tx3)}
+
+/* pressão */
+.gauge{position:relative;width:132px;height:132px;margin:8px auto 0}
+.gauge svg{width:100%;height:100%}
+.gauge .tk{stroke:rgba(255,255,255,.28);stroke-width:1.2;stroke-linecap:round}
+.gauge .needle{transform-box:view-box;transform-origin:50px 50px;transition:transform 1s var(--out)}
+.gauge .needle line{stroke:#fff;stroke-width:3.2;stroke-linecap:round}
+.g-mid{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.g-mid b{font-size:26px;font-weight:400;letter-spacing:-.03em;line-height:1}
+.g-mid span{font-size:12px;color:var(--tx3);margin-top:3px}
+.g-mid i{font-size:17px;margin-bottom:2px;color:var(--tx2)}
+
+/* luminosidade + sol */
+.lux-body{display:flex;align-items:flex-end;gap:20px;flex:1}
+.lux-body .big{flex-shrink:0}
+.arc{flex:1;min-width:0;height:96px}
+.arc svg{width:100%;height:100%;overflow:visible}
+.arc .curve{fill:none;stroke-width:1.6;vector-effect:non-scaling-stroke}
+.arc .hz{stroke:rgba(255,255,255,.3);stroke-width:1;vector-effect:non-scaling-stroke}
+.sun{position:absolute;width:13px;height:13px;margin:-6.5px 0 0 -6.5px;border-radius:50%;background:#fff;
+  box-shadow:0 0 14px 4px rgba(255,236,170,.65);transition:left 1s var(--out),top 1s var(--out)}
+.sun.down{background:rgba(255,255,255,.45);box-shadow:none}
+.foot.split{display:flex;justify-content:space-between;gap:12px}
+
+/* ar */
+.gas{display:block;width:100%;padding:12px 0 4px;border-radius:12px}
+.gas+.gas{margin-top:6px}
+.gas-hd{display:flex;justify-content:space-between;align-items:baseline;gap:12px;font-size:15px}
+.gas-hd b{font-weight:500}
+.gas-hd b small{font-weight:400;color:var(--tx3);font-size:13px;margin-left:6px}
+.scale{display:block;position:relative;height:6px;margin-top:10px;border-radius:99px;
+  background:linear-gradient(90deg,#5fe08a 0%,#c9e25a 38%,#ffc75a 52%,#ff9a4a 68%,#ff6a5e 100%)}
+.scale .mk{display:block;position:absolute;inset:0;transform:translateX(var(--p,0%));transition:transform 1s var(--out)}
+.scale .mk::before{content:'';position:absolute;left:0;top:50%;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;
+  background:#fff;box-shadow:0 0 0 3px rgba(8,18,36,.55)}
+.gas.na-g .scale{filter:grayscale(1);opacity:.35}
+.gas.na-g .mk{display:none}
+
+/* chuva */
+.c-rain{transition:background .8s var(--out)}
+.c-rain.wet{background:rgba(40,96,190,.42)}
+.rain-body{display:flex;align-items:center;gap:14px;margin-top:14px}
+.rain-ic{font-size:40px;color:var(--tx2);flex-shrink:0}
+.rain-st{font-size:28px;font-weight:400;letter-spacing:-.025em;line-height:1.1}
+.wet .rain-ic{color:#b9d7ff}
+.strip{display:block;position:relative;height:8px;margin-top:auto;border-radius:99px;background:rgba(255,255,255,.1);overflow:hidden}
+.strip i{position:absolute;top:0;bottom:0;border-radius:99px;background:#8fc2ff;min-width:3px}
+.strip-ax{display:flex;justify-content:space-between;margin-top:7px;font-size:12px;color:var(--tx3)}
+.c-rain .foot{margin-top:0;padding-top:10px}
+.no-wind .c-rain .rain-st{font-size:34px}
+.no-wind .c-rain .rain-ic{font-size:48px}
+.tile .drip{position:absolute;inset:0;opacity:0;transition:opacity .6s var(--out);pointer-events:none}
+.wet .drip{opacity:1}
+.drip i{position:absolute;top:-20px;width:1px;height:16px;background:linear-gradient(transparent,rgba(170,205,255,.7));
+  animation:dripfall var(--d) linear infinite;animation-delay:var(--w)}
+@keyframes dripfall{to{transform:translateY(240px)}}
+
+/* rodapé */
+footer{max-width:1180px;margin:56px auto 0;padding:0 28px 40px;display:flex;flex-wrap:wrap;justify-content:space-between;gap:10px 24px;
+  font-size:13px;color:var(--tx3)}
+footer a{white-space:nowrap;color:var(--tx2);text-decoration:none;box-shadow:inset 0 -1px rgba(255,255,255,.3)}
+footer a:hover{color:#fff}
+
+/* estado sem dados */
+body.stale .bento{opacity:.55;transition:opacity .8s var(--out)}
+
+/* ---------- detalhe (dialog) ---------- */
+dialog{margin:auto;width:min(640px,calc(100% - 32px));max-height:calc(100dvh - 48px);border:0;border-radius:30px;padding:22px 24px 24px;color:var(--tx);
+  background:rgba(14,26,48,.82);box-shadow:inset 0 0 0 1px var(--ring),0 24px 60px -12px rgba(2,8,20,.55);
+  backdrop-filter:blur(30px) saturate(150%);-webkit-backdrop-filter:blur(30px) saturate(150%);overflow:auto}
+dialog::backdrop{background:rgba(2,8,20,.42);animation:fade .3s var(--out)}
+dialog.closing::backdrop{opacity:0;transition:opacity .2s}
+@keyframes fade{from{opacity:0}}
+.sh-hd{display:flex;align-items:center;justify-content:space-between}
+.sh-x{display:grid;place-items:center;width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,.1);cursor:pointer;font-size:17px;
+  transition:transform .16s var(--out),background .2s}
+.sh-x:active{transform:scale(.92)}
+@media (hover:hover){.sh-x:hover{background:rgba(255,255,255,.18)}}
+.sh-val{margin-top:14px;font-size:52px;font-weight:300;letter-spacing:-.04em;line-height:1}
+.sh-val small{font-size:20px;color:var(--tx2);letter-spacing:0;margin-left:6px}
+.sh-note{margin-top:8px;color:var(--tx2);max-width:52ch}
+dialog .plot{height:210px;flex:none;margin-top:26px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:22px}
+.stats div{padding:12px 14px;border-radius:16px;background:rgba(255,255,255,.06)}
+.stats dt{font-size:12px;color:var(--tx3)}
+.stats dd{font-size:20px;font-weight:400;letter-spacing:-.02em;margin-top:2px}
+
+/* ---------- responsivo ---------- */
+@media (max-width:1000px){
+  .bento{grid-template-columns:repeat(6,1fr)}
+  .hero,.c-chart,.c6{grid-column:span 6}
+  .hero{min-height:0;padding-top:12px}
+  .c-chart{min-height:260px}
+}
+@media (max-width:640px){
+  .bento{grid-template-columns:repeat(2,1fr);gap:10px;padding:24px 14px 0}
+  .hero,.c-chart,.c6,.tile.c-rain{grid-column:span 2}
+  .c-rain .rain-st{font-size:28px}
+  .tile.c-wind{grid-column:span 2;min-height:0;display:grid;grid-template-columns:1fr auto;align-items:end}
+  .c-wind .th{grid-column:1/-1}
+  .c-wind .foot{padding-top:0}
+  .c3{grid-column:span 1}
+  .c-chart{order:1;min-height:250px}
+  .c6{order:2}
+  .hero{padding:4px 4px 6px}
+  .temp{font-size:96px}
+  .cond{font-size:21px;margin-top:14px}
+  .rain-ic{font-size:34px}
+  .foot{font-size:13px}
+  .tile{padding:16px 16px;min-height:164px;--r:22px}
+  .big{font-size:36px}
   .brand span{display:none}
-  .now{grid-template-columns:1fr;padding:40px 0 32px;gap:20px}
-  .grid{grid-template-columns:repeat(2,1fr);gap:0 18px}
-  .val{font-size:27px}
-  .plot{height:180px}
-  .glyph{width:32px;height:32px;margin-top:10px}
+  .pill{gap:14px}
+  .lux-body{flex-direction:column;align-items:stretch;gap:10px}
+  .gauge{width:116px;height:116px}
+  .stats dd{font-size:17px}
+  dialog{width:100%;max-width:none;margin:auto 0 0;border-radius:28px 28px 0 0;max-height:88dvh;
+    padding-bottom:calc(24px + env(safe-area-inset-bottom,0px))}
+  footer{padding:0 18px 32px}
 }
 @media (prefers-reduced-motion:reduce){
-  .in,.plot svg.reveal,.dot.ping::after,.pt.ping::after{animation:none}
-  .dot[data-s=wait]{animation:none}
-  .metric::before{transition:none}
+  .enter,.cloud,.drops i,.drip i,.dot.ping::after,.pt.ping,dialog::backdrop{animation:none}
+  .gauge .needle,.scale .mk,.sun{transition:none}
 }
 </style>
 </head>
 <body>
 
-<header class="top">
-  <div class="wrap bar">
-    <div class="brand"><strong>Estação Meteorológica</strong><span>UNIFESP ICT · São José dos Campos</span></div>
-    <div class="live" role="status"><span class="dot" id="dot" data-s="wait"></span><b id="conn">Conectando</b><span id="age"></span></div>
+<div class="sky" id="sky" aria-hidden="true">
+  <span class="stars" id="stars"></span>
+  <span class="cloud a"></span><span class="cloud b"></span><span class="cloud c"></span>
+  <div class="drops" id="drops"></div>
+</div>
+
+<header class="nav">
+  <div class="pill">
+    <span class="brand">Estação UNIFESP<span>São José dos Campos</span></span>
+    <span class="live" role="status"><span class="dot" id="dot" data-s="wait"></span><span id="conn">Conectando</span><span id="age"></span></span>
   </div>
-  <div class="fresh" id="fresh-bar"><i id="fresh"></i></div>
 </header>
 
-<main class="wrap">
-  <section class="now">
-    <button class="metric hero" data-k="t" aria-pressed="true" aria-label="Histórico de temperatura">
-      <svg class="glyph" id="glyph" viewBox="0 0 24 24" aria-hidden="true"></svg>
-      <span class="temp"><span id="v-t" class="na">—</span><span class="u">°C</span></span>
-    </button>
-    <div class="cond">
-      <h1 id="cond">Aguardando a primeira leitura</h1>
-      <p class="muted" id="cond-sub"></p>
-      <p class="range" id="range"></p>
-    </div>
+<main class="bento" id="bento">
+
+  <section class="hero enter" style="--i:0" aria-label="Agora">
+    <div class="temp"><span id="v-t">--</span><sup>°C</sup></div>
+    <p class="cond"><i class="ph-light ph-cloud" id="cond-ic"></i><span id="cond">Aguardando a estação</span></p>
+    <p class="hilo" id="hilo"></p>
   </section>
 
-  <section class="grid" aria-label="Leituras">
-    <button class="metric rd" data-k="h" aria-pressed="false" style="--i:0">
-      <span class="lbl">Umidade</span>
-      <span class="val"><span id="v-h" class="na">—</span><span class="u">%</span></span>
-      <span class="sub"></span>
-    </button>
-    <button class="metric rd" data-k="p" aria-pressed="false" style="--i:1">
-      <span class="lbl">Pressão</span>
-      <span class="val"><span id="v-p" class="na">—</span><span class="u">hPa</span></span>
-      <span class="sub" id="s-p"></span>
-    </button>
-    <button class="metric rd" data-k="l" aria-pressed="false" style="--i:2">
-      <span class="lbl">Luminosidade</span>
-      <span class="val"><span id="v-l" class="na">—</span><span class="u">lux</span></span>
-      <span class="sub"></span>
-    </button>
-    <button class="metric rd" data-k="w" aria-pressed="false" style="--i:3" id="i-w" hidden>
-      <span class="lbl">Vento</span>
-      <span class="val"><span id="v-w" class="na">—</span><span class="u">km/h</span></span>
-      <span class="sub"></span>
-    </button>
-    <button class="metric rd" data-k="co" aria-pressed="false" style="--i:4">
-      <span class="lbl">Monóxido de carbono</span>
-      <span class="val"><span id="v-co" class="na">—</span></span>
-      <span class="sub" id="s-co"></span>
-    </button>
-    <button class="metric rd" data-k="g" aria-pressed="false" style="--i:5">
-      <span class="lbl">Gases combustíveis</span>
-      <span class="val"><span id="v-g" class="na">—</span></span>
-      <span class="sub" id="s-g"></span>
-    </button>
+  <section class="tile c-chart enter" style="--i:1" aria-label="Temperatura nas últimas 24 horas">
+    <div class="chart-hd"><span class="th"><i class="ph-light ph-thermometer-simple"></i>Temperatura, 24 h</span><span id="t-range"></span></div>
+    <div class="plot" id="plot-t"></div>
+    <div class="axis" id="axis-t"></div>
   </section>
 
-  <section class="chart" aria-live="off">
-    <div class="ch-hd"><h2 id="ch-title">Temperatura</h2><span id="ch-range"></span></div>
-    <div class="plot" id="plot">
-      <svg id="svg" viewBox="0 0 1000 220" preserveAspectRatio="none" role="img" aria-labelledby="ch-title">
-        <defs><linearGradient id="fade" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stop-color="var(--acc)" stop-opacity=".16"/><stop offset="1" stop-color="var(--acc)" stop-opacity="0"/>
-        </linearGradient></defs>
-        <line class="grid-y" x1="0" x2="1000" y1="110" y2="110"/>
-        <path id="area"/><path id="line"/>
-      </svg>
-      <span class="pt" id="last" hidden></span>
-      <div class="cross" id="cross"><span class="pt" id="cross-pt"></span><span class="tip" id="tip"></span></div>
-      <p class="empty" id="empty">Coletando dados para o gráfico</p>
-    </div>
-    <div class="axis"><span id="ax0"></span><span id="ax1"></span><span id="ax2"></span></div>
+  <section class="tile c3 c-rain enter" style="--i:2" id="rain-tile" aria-label="Chuva">
+    <span class="drip" id="drip"></span>
+    <span class="th"><i class="ph-light ph-umbrella-simple"></i>Chuva</span>
+    <span class="rain-body"><i class="ph-light ph-cloud rain-ic" id="rain-ic"></i><span class="rain-st" id="rain-st">--</span></span>
+    <span class="foot" id="f-r"></span>
+    <span class="strip" id="strip" title="Períodos com chuva nas últimas 24 h"></span>
+    <span class="strip-ax"><span>−24 h</span><span>agora</span></span>
   </section>
 
-  <footer>
-    <span class="mono">LoRa 915 MHz · RSSI <span id="rssi">—</span> · SNR <span id="snr">—</span></span>
-    <span>Sensores de gás não calibrados: nível relativo.</span>
-    <span>TCC 2026 · Guilherme Gimenes · <a href="https://github.com/gimenes10/gateway_tcc" target="_blank" rel="noopener">código-fonte</a></span>
-  </footer>
+  <button class="tile c3 enter" style="--i:3" data-k="h">
+    <span class="th"><i class="ph-light ph-drop"></i>Umidade<i class="ph-light ph-arrow-up-right more"></i></span>
+    <span class="big"><span id="v-h" class="na">--</span><small>%</small></span>
+    <span class="foot" id="f-h"></span>
+  </button>
+
+  <button class="tile c3 enter" style="--i:4" data-k="p">
+    <span class="th"><i class="ph-light ph-gauge"></i>Pressão<i class="ph-light ph-arrow-up-right more"></i></span>
+    <span class="gauge">
+      <svg viewBox="0 0 100 100" aria-hidden="true"><g id="ticks"></g>
+        <g class="needle" id="needle"><line x1="21.7" y1="78.3" x2="29.8" y2="70.2"/></g></svg>
+      <span class="g-mid"><i class="ph-light ph-minus" id="p-tr"></i><b id="v-p" class="na">--</b><span>hPa</span></span>
+    </span>
+    <span class="foot" id="f-p"></span>
+  </button>
+
+  <button class="tile c3 c-wind enter" style="--i:5" data-k="w" id="wind-tile" hidden>
+    <span class="th"><i class="ph-light ph-wind"></i>Vento<i class="ph-light ph-arrow-up-right more"></i></span>
+    <span class="big"><span id="v-w" class="na">--</span><small>km/h</small></span>
+    <span class="foot" id="f-w"></span>
+  </button>
+  <button class="tile c6 enter" style="--i:6" data-k="l">
+    <span class="th"><i class="ph-light ph-sun"></i>Luminosidade<i class="ph-light ph-arrow-up-right more"></i></span>
+    <span class="lux-body">
+      <span class="big"><span id="v-l" class="na">--</span><small>lux</small></span>
+      <span class="arc" id="arc"></span>
+    </span>
+    <span class="foot split"><span id="sunrise"></span><span id="sunset"></span></span>
+  </button>
+
+  <section class="tile c-air c6 enter" style="--i:7" aria-label="Qualidade do ar">
+    <span class="th"><i class="ph-light ph-factory"></i>Qualidade do ar</span>
+    <button class="gas na-g" data-k="co" id="gas-co">
+      <span class="gas-hd"><span>Monóxido de carbono</span><b id="v-co">--</b></span>
+      <span class="scale"><span class="mk"></span></span>
+    </button>
+    <button class="gas na-g" data-k="g" id="gas-g">
+      <span class="gas-hd"><span>Gases combustíveis</span><b id="v-g">--</b></span>
+      <span class="scale"><span class="mk"></span></span>
+    </button>
+    <span class="foot">Sensores sem calibração: nível relativo.</span>
+  </section>
+
+
 </main>
+
+<footer>
+  <span>Enlace LoRa 915 MHz: RSSI <span id="rssi">--</span>, SNR <span id="snr">--</span></span>
+  <span>TCC 2026, Guilherme Gimenes, UNIFESP ICT. <a href="https://github.com/gimenes10/gateway_tcc" target="_blank" rel="noopener">Código-fonte</a></span>
+</footer>
+
+<dialog id="sheet" aria-labelledby="sh-title">
+  <div class="sh-hd"><span class="th" id="sh-title"></span><button class="sh-x" id="sh-x" aria-label="Fechar"><i class="ph-light ph-x"></i></button></div>
+  <div class="sh-val" id="sh-val"></div>
+  <p class="sh-note" id="sh-note"></p>
+  <div class="plot" id="plot-sh"></div>
+  <div class="axis" id="axis-sh"></div>
+  <dl class="stats">
+    <div><dt>Mínima 24 h</dt><dd id="st-min">--</dd></div>
+    <div><dt>Média 24 h</dt><dd id="st-avg">--</dd></div>
+    <div><dt>Máxima 24 h</dt><dd id="st-max">--</dd></div>
+  </dl>
+</dialog>
 
 <script>
 (() => {
 'use strict';
 
-/* Credencial somente-leitura (subscribe) — pública por design: o navegador conecta direto ao broker.
+/* Credencial somente-leitura (subscribe), pública por design: o navegador conecta direto ao broker.
    Publicação usa outro usuário, definido em components/board_config/include/credentials.h */
 const MH = '9d10239851aa4a5fa45c7a5e8b7bdebd.s1.eu.hivemq.cloud', MP = 8884,
       MU = 'webviewer', MW = '12345678', MT = 'estacao/sjc/dados';
 
+/* Local da estação (Parque Tecnológico, SJC) e fuso fixo UTC-3 */
+const LAT = -23.16, LON = -45.79, TZ_MS = -3 * 36e5;
+
 /* Ordem das colunas no histórico: [ts, ...K] */
-const K = ['t', 'h', 'p', 'l', 'w', 'co', 'g'];
+const K = ['t', 'h', 'p', 'l', 'w', 'co', 'g', 'r'];
 const M = {
-  t:  { f: 'temperatura', name: 'Temperatura',         u: '°C',   d: 1 },
-  h:  { f: 'umidade',     name: 'Umidade',             u: '%',    d: 0 },
-  p:  { f: 'pressao',     name: 'Pressão',             u: 'hPa',  d: 0 },
-  l:  { f: 'lux',         name: 'Luminosidade',        u: 'lux',  d: 0 },
-  w:  { f: 'vento_ms',    name: 'Vento',               u: 'km/h', d: 0, x: 3.6 },
-  co: { f: 'mq7_voltage', name: 'Monóxido de carbono', u: 'V',    d: 2 },
-  g:  { f: 'mq2_voltage', name: 'Gases combustíveis',  u: 'V',    d: 2 },
+  t:  { f: 'temperatura', name: 'Temperatura',         u: '°C',   d: 1, ic: 'thermometer-simple' },
+  h:  { f: 'umidade',     name: 'Umidade',             u: '%',    d: 0, ic: 'drop',
+        note: 'Com ponto de orvalho acima de 20 °C, o ar fica abafado.' },
+  p:  { f: 'pressao',     name: 'Pressão',             u: 'hPa',  d: 1, ic: 'gauge',
+        note: 'Queda contínua de pressão costuma anteceder mudança de tempo.' },
+  l:  { f: 'lux',         name: 'Luminosidade',        u: 'lux',  d: 0, ic: 'sun',
+        note: 'O BH1750 satura perto de 55 mil lux sob sol forte.' },
+  w:  { f: 'vento_ms',    name: 'Vento',               u: 'km/h', d: 0, ic: 'wind', x: 3.6,
+        note: 'Velocidade medida pelo anemômetro de conchas.' },
+  co: { f: 'mq7_voltage', name: 'Monóxido de carbono', u: 'V',    d: 2, ic: 'factory',
+        note: 'MQ-7 sem calibração: o valor é a tensão de saída do sensor.' },
+  g:  { f: 'mq2_voltage', name: 'Gases combustíveis',  u: 'V',    d: 2, ic: 'factory',
+        note: 'MQ-2 sem calibração: o valor é a tensão de saída do sensor.' },
+  r:  { f: 'chuva_status', d: 0 },
 };
 const COL = k => K.indexOf(k) + 1;
-const DAY = 864e5, STORE = 'estacao-sjc:hist:v1', MAX_ROWS = 4000, PLOT_N = 360, W = 1000, H = 220;
+const DAY = 864e5, STORE = 'estacao-sjc:hist:v2', MAX_ROWS = 4000, PLOT_N = 320;
 
 const $ = id => document.getElementById(id);
 const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -258,23 +393,26 @@ const has = v => typeof v === 'number' && isFinite(v);
 const nf = {};
 const fmt = (v, d) => (nf[d] ||= new Intl.NumberFormat('pt-BR',
   { minimumFractionDigits: d, maximumFractionDigits: d })).format(v).replace('-', '−');
-const hhmm = ts => new Date(ts).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-const restart = (el, cls) => { el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); };
+const clockFmt = new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' });
+const hhmm = ts => clockFmt.format(ts);
+const restart = (el, c) => { el.classList.remove(c); void el.offsetWidth; el.classList.add(c); };
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 
-let hist = load(), sel = 't', lastAt = 0, period = 0, mqttUp = false, geo = [];
+let hist = load(), lastAt = 0, period = 0, mqttUp = false, lastPkt = null;
 
-/* ---------- histórico (localStorage, 24 h) ---------- */
+/* ---------- histórico local (24 h) ---------- */
 function load() {
   try {
     const a = JSON.parse(localStorage.getItem(STORE) || '[]'), lim = Date.now() - DAY;
-    return Array.isArray(a) ? a.filter(r => Array.isArray(r) && r[0] > lim) : [];
+    return Array.isArray(a) ? a.filter(r => Array.isArray(r) && r.length === K.length + 1 && r[0] > lim) : [];
   } catch (e) { return []; }
 }
 function save() {
   const lim = Date.now() - DAY;
   while (hist.length && (hist[0][0] < lim || hist.length > MAX_ROWS)) hist.shift();
-  try { localStorage.setItem(STORE, JSON.stringify(hist)); } catch (e) { /* cota cheia: segue só em memória */ }
+  try { localStorage.setItem(STORE, JSON.stringify(hist)); } catch (e) { /* cota cheia: segue em memória */ }
 }
+function series(k) { const c = COL(k); return hist.filter(r => has(r[c])).map(r => [r[0], r[c]]); }
 function estimatePeriod() {
   const dt = [];
   for (let i = Math.max(1, hist.length - 9); i < hist.length; i++) {
@@ -285,205 +423,388 @@ function estimatePeriod() {
   dt.sort((a, b) => a - b);
   return dt[dt.length >> 1];
 }
+function stats(k) {
+  const s = series(k);
+  if (!s.length) return null;
+  let mn = Infinity, mx = -Infinity, sum = 0;
+  for (const [, v] of s) { mn = Math.min(mn, v); mx = Math.max(mx, v); sum += v; }
+  return { mn, mx, avg: sum / s.length, first: s[0][0], n: s.length };
+}
+
+/* ---------- posição do sol (algoritmo simplificado da NOAA) ---------- */
+function sunElev(t) {
+  const R = Math.PI / 180, d = (t - 946728000000) / DAY;
+  const g = (357.529 + 0.98560028 * d) * R, q = 280.459 + 0.98564736 * d;
+  const L = (q + 1.915 * Math.sin(g) + 0.020 * Math.sin(2 * g)) * R, e = (23.439 - 3.6e-7 * d) * R;
+  const ra = Math.atan2(Math.cos(e) * Math.sin(L), Math.cos(L)), dec = Math.asin(Math.sin(e) * Math.sin(L));
+  const H = ((18.697374558 + 24.06570982441908 * d) % 24) * 15 * R + LON * R - ra;
+  return Math.asin(Math.sin(LAT * R) * Math.sin(dec) + Math.cos(LAT * R) * Math.cos(dec) * Math.cos(H)) / R;
+}
+let sunDay = null;
+function sunToday(now) {
+  const start = Math.floor((now + TZ_MS) / DAY) * DAY - TZ_MS;
+  if (sunDay && sunDay.start === start) return sunDay;
+  const pts = []; let rise = null, set = null, prev = null;
+  for (let m = 0; m <= 1440; m += 4) {
+    const t = start + m * 6e4, el = sunElev(t);
+    pts.push([m / 1440, el]);
+    if (prev !== null) {
+      if (prev < -0.833 && el >= -0.833) rise = t;
+      if (prev >= -0.833 && el < -0.833) set = t;
+    }
+    prev = el;
+  }
+  return (sunDay = { start, pts, rise, set });
+}
+/* Iluminância horizontal esperada com céu limpo; limitada à saturação do BH1750 */
+const clearLux = el => el <= 0 ? 0 : Math.min(50000, 128000 * Math.sin(el * Math.PI / 180) * Math.exp(-0.21 / Math.sin(el * Math.PI / 180)));
+
+/* ---------- condição e céu ---------- */
+const SKY = {
+  clear:    ['#1756a8', '#3a86d1', '#7dbbe8', .06, 0],
+  partly:   ['#2d5b8c', '#5a88b5', '#98bad6', .3, 0],
+  overcast: ['#3f5163', '#5f7184', '#8796a5', .5, 0],
+  rain:     ['#232f3d', '#344353', '#4c5a69', .45, 0],
+  dusk:     ['#1a2251', '#5b4a7e', '#d9895f', .12, .25],
+  night:    ['#050b1a', '#0b1730', '#16264d', .04, .9],
+  nrain:    ['#070c15', '#101824', '#1a2431', .3, 0],
+};
+function condition(d, now) {
+  const el = sunElev(now), raining = d && d.chuva_status === 1, lux = d && d.lux;
+  if (raining) return el < -6 ? ['nrain', 'Chovendo', 'cloud-rain'] : ['rain', 'Chovendo', 'cloud-rain'];
+  if (el < -6) return ['night', 'Noite', 'moon-stars'];
+  if (el < 5) {
+    const morning = ((now + TZ_MS) % DAY) < DAY / 2;
+    return ['dusk', morning ? 'Amanhecendo' : 'Entardecendo', 'sun-horizon'];
+  }
+  if (!has(lux)) return ['partly', 'Dia', 'cloud-sun'];
+  const r = lux / clearLux(el);
+  if (r > .55) return ['clear', 'Céu limpo', 'sun'];
+  if (r > .22) return ['partly', 'Parcialmente nublado', 'cloud-sun'];
+  return ['overcast', 'Nublado', 'cloud'];
+}
+function paintSky(key) {
+  const [a, b, c, cl, st] = SKY[key], s = $('sky').style;
+  s.setProperty('--s1', a); s.setProperty('--s2', b); s.setProperty('--s3', c);
+  s.setProperty('--cloud', cl); s.setProperty('--stars', st);
+  document.querySelector('meta[name=theme-color]').content = a;
+  rainLayer(key === 'rain' || key === 'nrain');
+}
+function rainLayer(on) {
+  const box = $('drops');
+  if (!on || reduce) { box.innerHTML = ''; return; }
+  if (box.childElementCount) return;
+  let h = '';
+  for (let i = 0; i < 70; i++)
+    h += `<i style="left:${(Math.random() * 110).toFixed(1)}%;--d:${(.55 + Math.random() * .45).toFixed(2)}s;--w:-${(Math.random() * 2).toFixed(2)}s;opacity:${(.35 + Math.random() * .6).toFixed(2)}"></i>`;
+  box.innerHTML = h;
+}
+(function stars() {
+  let s = '', seed = 7;
+  const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  for (let i = 0; i < 90; i++)
+    s += `${(rnd() * 100).toFixed(2)}vw ${(rnd() * 60).toFixed(2)}vh 0 ${rnd() > .85 ? 1 : 0}px rgba(255,255,255,${(.35 + rnd() * .6).toFixed(2)}),`;
+  $('stars').style.boxShadow = s.slice(0, -1);
+})();
+(function drips() {
+  let h = '';
+  for (let i = 0; i < 14; i++)
+    h += `<i style="left:${(4 + Math.random() * 92).toFixed(1)}%;--d:${(.7 + Math.random() * .5).toFixed(2)}s;--w:-${(Math.random() * 1.2).toFixed(2)}s"></i>`;
+  $('drip').innerHTML = h;
+})();
+document.addEventListener('visibilitychange', () => $('sky').classList.toggle('paused', document.hidden));
 
 /* ---------- números com transição ---------- */
 function setNum(el, v, d) {
   cancelAnimationFrame(el._raf);
-  if (!has(v)) { el.textContent = '—'; el.classList.add('na'); el._v = undefined; return; }
-  const from = el._v;
-  el._v = v;
-  if (el.classList.contains('na')) { el.classList.remove('na'); restart(el.parentNode, 'in'); }
+  if (!has(v)) { el.textContent = '--'; el.classList.add('na'); el._v = undefined; return; }
+  const from = el._v; el._v = v; el.classList.remove('na');
   if (reduce || !has(from) || from === v) { el.textContent = fmt(v, d); return; }
-  const t0 = performance.now(), dur = 700;
+  const t0 = performance.now(), dur = 650;
   const step = now => {
-    const k = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(2, -10 * k);
-    el.textContent = fmt(from + (v - from) * (k === 1 ? 1 : e), d);
+    const k = Math.min(1, (now - t0) / dur), e = k === 1 ? 1 : 1 - Math.pow(2, -10 * k);
+    el.textContent = fmt(from + (v - from) * e, d);
     if (k < 1) el._raf = requestAnimationFrame(step);
   };
   el._raf = requestAnimationFrame(step);
 }
 
-/* Limiares herdados do firmware/dashboard anterior (tensão relativa 0–3,3 V) */
-function gas(k, v) {
-  const el = $('v-' + k);
-  if (!has(v)) { el.textContent = '—'; el.className = 'na'; $('s-' + k).textContent = ''; return; }
-  const [l, t] = v > 2.2 ? ['bad', 'Alto'] : v > 1.4 ? ['warn', 'Elevado'] : ['ok', 'Normal'];
-  if (el.classList.contains('na')) restart(el.parentNode, 'in');
-  el.className = 'lvl'; el.dataset.l = l; el.textContent = t;
-  $('s-' + k).textContent = fmt(v, 2) + ' V';
-}
+/* ---------- gráfico ---------- */
+const TCOL = [[5, '#7ab8ff'], [14, '#62d3e8'], [21, '#9be37a'], [26, '#ffd25a'], [31, '#ff9a4a'], [37, '#ff5a4a']];
+let gid = 0;
+function makeChart(root, axis) {
+  const id = 'g' + (++gid), W = 1000, H = 200;
+  root.innerHTML =
+    `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true"><defs>
+       <linearGradient id="${id}s" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="${H}"></linearGradient>
+       <linearGradient id="${id}f" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".16"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+     </defs><line class="base" x1="0" x2="${W}" y1="${H / 2}" y2="${H / 2}"/><path fill="url(#${id}f)"/><path class="line" stroke="url(#${id}s)"/></svg>
+     <span class="pt" hidden></span><div class="cross"><span class="pt"></span><span class="tip"></span></div>
+     <p class="empty">O gráfico aparece conforme as leituras chegam.</p>`;
+  const [area, line] = root.querySelectorAll('path'), grad = root.querySelector(`#${id}s`),
+        last = root.querySelector(':scope > .pt'), cross = root.querySelector('.cross'),
+        cpt = cross.querySelector('.pt'), tip = cross.querySelector('.tip'), empty = root.querySelector('.empty');
+  let geo = [], key = 't';
 
-function applyRow(r) {
-  K.forEach((k, i) => {
-    const v = r[i + 1];
-    if (k === 'co' || k === 'g') return gas(k, v);
-    setNum($('v-' + k), v, M[k].d);
+  root.addEventListener('pointermove', e => {
+    if (!geo.length) return;
+    const r = root.getBoundingClientRect(), fx = (e.clientX - r.left) / r.width;
+    let b = geo[0];
+    for (const g of geo) if (Math.abs(g[0] - fx) < Math.abs(b[0] - fx)) b = g;
+    cross.style.transform = `translateX(${b[0] * r.width}px)`;
+    cpt.style.top = b[1] * 100 + '%';
+    tip.textContent = `${fmt(b[3], M[key].d)} ${M[key].u}, ${hhmm(b[2])}`;
+    cross.classList.toggle('flip', b[0] > .68);
+    cross.classList.add('on');
   });
-  $('i-w').hidden = !hist.some(x => has(x[COL('w')]));
-  $('s-p').textContent = pressureTrend();
-}
+  root.addEventListener('pointerleave', () => cross.classList.remove('on'));
 
-/* ---------- condição do céu ---------- */
-const ICON = {
-  sun:   '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.5 1.5M17.6 17.6l1.5 1.5M19.1 4.9l-1.5 1.5M6.4 17.6l-1.5 1.5"/>',
-  part:  '<path d="M8 17a4.5 4.5 0 010-9 5.5 5.5 0 0110.4 2A3.6 3.6 0 0118 17z"/><path d="M6.5 6.5L5.4 5.4M12 3.5V2M18.6 5.4l-1.1 1.1"/>',
-  cloud: '<path d="M7 18a4.5 4.5 0 010-9 6 6 0 0111.3 1.8A3.8 3.8 0 0117.5 18z"/>',
-  rain:  '<path d="M7 15a4.5 4.5 0 010-9 6 6 0 0111.3 1.8A3.8 3.8 0 0117.5 15z"/><path d="M8 18.5l-1 2.5M12 18.5l-1 2.5M16 18.5l-1 2.5"/>',
-  moon:  '<path d="M20 14.5A8.5 8.5 0 019.5 4a8.5 8.5 0 1010.5 10.5z"/>',
-};
-function sky(d) {
-  if (d.chuva_status === 1) return ['rain', 'Chovendo agora'];
-  const l = d.lux;
-  if (!has(l))    return ['cloud', 'Céu indisponível'];
-  if (l > 20000)  return ['sun', 'Céu limpo'];
-  if (l > 3000)   return ['part', 'Parcialmente nublado'];
-  if (l > 300)    return ['cloud', 'Nublado'];
-  if (l > 15)     return ['cloud', 'Encoberto'];
-  return ['moon', 'Noite'];
+  return {
+    draw(k) {
+      key = k;
+      let pts = series(k);
+      const none = pts.length < 2;
+      empty.hidden = !none; last.hidden = none;
+      if (none) { line.setAttribute('d', ''); area.setAttribute('d', ''); axis.innerHTML = ''; geo = []; return null; }
+      if (pts.length > PLOT_N) {
+        const b = Math.ceil(pts.length / PLOT_N), o = [];
+        for (let j = 0; j < pts.length; j += b) {
+          const s = pts.slice(j, j + b);
+          o.push([s[s.length - 1][0], s.reduce((a, p) => a + p[1], 0) / s.length]);
+        }
+        pts = o;
+      }
+      let mn = Infinity, mx = -Infinity;
+      for (const p of pts) { mn = Math.min(mn, p[1]); mx = Math.max(mx, p[1]); }
+      const pad = (mx - mn) * .18 || Math.max(Math.abs(mx) * .01, .5), lo = mn - pad, hi = mx + pad;
+      const t0 = pts[0][0], t1 = pts[pts.length - 1][0], span = t1 - t0 || 1;
+      const X = t => (t - t0) / span * W, Y = v => H - (v - lo) / (hi - lo) * H;
+      const gap = Math.max(6e5, 5 * period);
+
+      let dl = '', da = '', seg = [];
+      const flush = () => {
+        if (seg.length > 1) {
+          const s = seg.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join('');
+          dl += s; da += s + `L${seg[seg.length - 1][0].toFixed(1)} ${H}L${seg[0][0].toFixed(1)} ${H}Z`;
+        }
+        seg = [];
+      };
+      geo = pts.map((p, i) => {
+        if (i && p[0] - pts[i - 1][0] > gap) flush();
+        const xy = [X(p[0]), Y(p[1])]; seg.push(xy);
+        return [xy[0] / W, xy[1] / H, p[0], p[1]];
+      });
+      flush();
+      line.setAttribute('d', dl); area.setAttribute('d', da);
+
+      /* traço colorido pela própria temperatura; demais grandezas em branco */
+      grad.innerHTML = k === 't'
+        ? TCOL.map(([tv, c]) => [clamp(Y(tv) / H, 0, 1), c]).sort((a, b) => a[0] - b[0])
+            .map(([o, c]) => `<stop offset="${o.toFixed(3)}" stop-color="${c}"/>`).join('')
+        : '<stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#fff"/>';
+
+      const g = geo[geo.length - 1];
+      last.style.left = g[0] * 100 + '%'; last.style.top = g[1] * 100 + '%';
+      axis.innerHTML = `<span>${hhmm(t0)}</span><span>${hhmm(t0 + span / 2)}</span><span>${hhmm(t1)}</span>`;
+      return { mn, mx, last };
+    },
+  };
 }
-/* Índice de calor (Rothfusz), só faz sentido acima de ~27 °C */
+const chartT = makeChart($('plot-t'), $('axis-t'));
+const chartS = makeChart($('plot-sh'), $('axis-sh'));
+
+/* ---------- blocos ---------- */
+function dew(t, rh) { const a = 17.62, b = 243.12, g = Math.log(Math.max(rh, 1) / 100) + a * t / (b + t); return b * g / (a - g); }
 function heat(t, rh) {
-  if (t < 27 || rh < 40) return NaN;
+  if (!has(t) || !has(rh) || t < 27 || rh < 40) return NaN;
   const f = t * 1.8 + 32;
   const hi = -42.379 + 2.04901523 * f + 10.14333127 * rh - .22475541 * f * rh - .00683783 * f * f
-           - .05481717 * rh * rh + .00122874 * f * f * rh + .00085282 * f * rh * rh - .00000199 * f * f * rh * rh;
+           - .05481717 * rh * rh + .00122874 * f * f * rh + .00085282 * f * rh * rh - 1.99e-6 * f * f * rh * rh;
   return (hi - 32) / 1.8;
 }
-function condition(d) {
-  const [ic, txt] = sky(d);
-  $('glyph').innerHTML = ICON[ic];
-  $('cond').textContent = txt;
-  const sub = [];
-  if (d.chuva_status === 0) sub.push('Sem chuva');
-  const hi = heat(d.temperatura, d.umidade);
-  if (has(hi) && hi - d.temperatura > .5) sub.push('Sensação de ' + fmt(hi, 0) + ' °C');
-  $('cond-sub').textContent = sub.join(' · ');
+function beaufort(k) {
+  return k < 1 ? 'Calmo' : k < 6 ? 'Aragem' : k < 12 ? 'Brisa leve' : k < 20 ? 'Brisa fraca'
+       : k < 29 ? 'Brisa moderada' : k < 39 ? 'Brisa forte' : k < 50 ? 'Vento fresco' : k < 62 ? 'Vento forte' : 'Ventania';
 }
 
-/* ---------- derivados do histórico ---------- */
-function tempRange() {
-  const c = COL('t'), r = hist.filter(x => has(x[c]));
-  if (r.length < 2) { $('range').textContent = ''; return; }
-  let mn = Infinity, mx = -Infinity;
-  for (const x of r) { mn = Math.min(mn, x[c]); mx = Math.max(mx, x[c]); }
-  const span = r[r.length - 1][0] - r[0][0];
-  $('range').innerHTML = 'Mín <b>' + fmt(mn, 1) + '°</b> · Máx <b>' + fmt(mx, 1) + '°</b> '
-    + (span > 23 * 36e5 ? 'nas últimas 24 h' : 'desde ' + hhmm(r[0][0]));
-}
+(function buildTicks() {
+  let s = '';
+  for (let i = 0; i <= 40; i++) {
+    const a = (135 + 270 * i / 40) * Math.PI / 180, r1 = i % 5 ? 41 : 38;
+    s += `<line class="tk" x1="${(50 + r1 * Math.cos(a)).toFixed(2)}" y1="${(50 + r1 * Math.sin(a)).toFixed(2)}" x2="${(50 + 45 * Math.cos(a)).toFixed(2)}" y2="${(50 + 45 * Math.sin(a)).toFixed(2)}"/>`;
+  }
+  $('ticks').innerHTML = s;
+})();
+
 /* Tendência barométrica em janela de até 3 h */
-function pressureTrend() {
-  const c = COL('p'), r = hist.filter(x => has(x[c]));
-  if (r.length < 2) return '';
-  const last = r[r.length - 1], base = r.find(x => x[0] >= last[0] - 3 * 36e5);
-  const span = last[0] - base[0];
-  if (span < 45 * 6e4) return '';
-  const dv = last[c] - base[c], h = Math.max(1, Math.round(span / 36e5));
-  if (Math.abs(dv) < .5) return 'Estável em ' + h + ' h';
-  return (dv > 0 ? 'Subindo +' : 'Em queda ') + fmt(dv, 1) + ' hPa em ' + h + ' h';
+function pTrend() {
+  const s = series('p');
+  if (s.length < 2) return null;
+  const last = s[s.length - 1], base = s.find(x => x[0] >= last[0] - 3 * 36e5), span = last[0] - base[0];
+  if (span < 45 * 6e4) return null;
+  return { dv: last[1] - base[1], h: Math.max(1, Math.round(span / 36e5)) };
+}
+function pressure(v) {
+  setNum($('v-p'), v, 0);
+  if (has(v)) {
+    const lo = Math.floor((v - 20) / 10) * 10, f = clamp((v - lo) / 40, 0, 1);   /* faixa de 40 hPa estável */
+    $('needle').style.transform = `rotate(${(270 * f).toFixed(1)}deg)`;
+  }
+  const tr = pTrend(), ic = $('p-tr');
+  if (!tr) { ic.className = 'ph-light ph-minus'; $('f-p').textContent = has(v) ? 'Calculando tendência' : ''; return; }
+  const s = Math.abs(tr.dv) < .5 ? 0 : Math.sign(tr.dv);
+  ic.className = 'ph-light ' + (s > 0 ? 'ph-arrow-up' : s < 0 ? 'ph-arrow-down' : 'ph-minus');
+  $('f-p').textContent = s === 0 ? `Estável em ${tr.h} h` : `${s > 0 ? '+' : ''}${fmt(tr.dv, 1)} hPa em ${tr.h} h`;
+}
+function gas(k, v) {
+  const box = $('gas-' + k), el = $('v-' + k);
+  box.classList.toggle('na-g', !has(v));
+  if (!has(v)) { el.textContent = '--'; return; }
+  const t = v > 2.2 ? 'Alto' : v > 1.4 ? 'Elevado' : 'Normal';   /* limiares herdados do firmware */
+  el.innerHTML = `${t}<small>${fmt(v, 2)} V</small>`;
+  box.querySelector('.mk').style.setProperty('--p', (clamp(v / 3.3, 0, 1) * 100).toFixed(1) + '%');
+}
+function rain(v) {
+  const tile = $('rain-tile'), raining = v === 1, c = COL('r');
+  tile.classList.toggle('wet', raining);
+  $('rain-ic').className = 'ph-light rain-ic ' + (raining ? 'ph-cloud-rain' : 'ph-cloud');
+  $('rain-st').textContent = !has(v) ? '--' : raining ? 'Chovendo' : 'Sem chuva';
+  const rows = hist.filter(r => has(r[c]));
+  strip(rows, c);
+  if (!rows.length) { $('f-r').textContent = ''; return; }
+  if (raining) {
+    let i = rows.length - 1;
+    while (i > 0 && rows[i - 1][c] === 1) i--;
+    $('f-r').textContent = 'Desde ' + hhmm(rows[i][0]);
+    return;
+  }
+  const wet = rows.filter(r => r[c] === 1);
+  const span = rows[rows.length - 1][0] - rows[0][0];
+  $('f-r').textContent = wet.length ? 'Última chuva às ' + hhmm(wet[wet.length - 1][0])
+    : span > 23 * 36e5 ? 'Sem chuva nas últimas 24 h' : 'Sem chuva desde ' + hhmm(rows[0][0]);
+}
+/* Linha do tempo de 24 h com os trechos em que o sensor marcou chuva */
+function strip(rows, c) {
+  const now = Date.now(), t0 = now - DAY, step = period || 6e4, segs = [];
+  let a = null, b = null;
+  for (const r of rows) {
+    if (r[c] === 1) {
+      if (a !== null && r[0] - b > Math.max(6e5, 5 * step)) { segs.push([a, b]); a = null; }
+      if (a === null) a = r[0];
+      b = r[0] + step;
+    } else if (a !== null) { segs.push([a, b]); a = null; }
+  }
+  if (a !== null) segs.push([a, Math.min(b, now)]);
+  $('strip').innerHTML = segs.map(([x, y]) => {
+    const l = clamp((x - t0) / DAY, 0, 1), w = clamp((y - t0) / DAY, 0, 1) - l;
+    return `<i style="left:${(l * 100).toFixed(2)}%;width:${(w * 100).toFixed(2)}%"></i>`;
+  }).join('');
+}
+function sunArc(now) {
+  const s = sunToday(now), W = 300, H = 100, HZ = 66;
+  const yOf = el => clamp(HZ - el / 90 * 60, 4, 98);
+  const path = s.pts.map(([x, el], i) => (i ? 'L' : 'M') + (x * W).toFixed(1) + ' ' + yOf(el).toFixed(1)).join('');
+  const fx = clamp((now - s.start) / DAY, 0, 1), el = sunElev(now);
+  $('arc').innerHTML =
+    `<span style="position:relative;display:block;width:100%;height:100%">
+      <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"><defs>
+        <clipPath id="up"><rect x="0" y="0" width="${W}" height="${HZ}"/></clipPath>
+        <clipPath id="dn"><rect x="0" y="${HZ}" width="${W}" height="${H - HZ}"/></clipPath></defs>
+        <line class="hz" x1="0" x2="${W}" y1="${HZ}" y2="${HZ}"/>
+        <path class="curve" d="${path}" stroke="rgba(255,255,255,.85)" clip-path="url(#up)"/>
+        <path class="curve" d="${path}" stroke="rgba(255,255,255,.22)" clip-path="url(#dn)"/></svg>
+      <span class="sun${el < -0.833 ? ' down' : ''}" style="left:${(fx * 100).toFixed(2)}%;top:${(yOf(el) / H * 100).toFixed(2)}%"></span>
+    </span>`;
+  $('sunrise').textContent = s.rise ? 'Nascer do sol ' + hhmm(s.rise) : '';
+  $('sunset').textContent = s.set ? 'Pôr do sol ' + hhmm(s.set) : '';
 }
 
-/* ---------- gráfico ---------- */
-function drawChart(animate) {
-  const m = M[sel], c = COL(sel);
-  let pts = hist.filter(x => has(x[c])).map(x => [x[0], x[c]]);
-  $('ch-title').textContent = m.name;
-  const empty = pts.length < 2;
-  $('empty').hidden = !empty; $('last').hidden = empty;
-  if (empty) {
-    $('line').setAttribute('d', ''); $('area').setAttribute('d', '');
-    $('ch-range').textContent = ''; ['ax0', 'ax1', 'ax2'].forEach(i => $(i).textContent = '');
-    geo = []; return;
-  }
-  if (pts.length > PLOT_N) {
-    const b = Math.ceil(pts.length / PLOT_N), o = [];
-    for (let j = 0; j < pts.length; j += b) {
-      const s = pts.slice(j, j + b);
-      o.push([s[s.length - 1][0], s.reduce((a, p) => a + p[1], 0) / s.length]);
-    }
-    pts = o;
-  }
-  let mn = Infinity, mx = -Infinity;
-  for (const p of pts) { mn = Math.min(mn, p[1]); mx = Math.max(mx, p[1]); }
-  const pad = (mx - mn) * .15 || Math.max(Math.abs(mx) * .01, .5), lo = mn - pad, hi = mx + pad;
-  const t0 = pts[0][0], t1 = pts[pts.length - 1][0], span = t1 - t0 || 1;
-  const X = t => (t - t0) / span * W, Y = v => H - (v - lo) / (hi - lo) * H;
-  const gap = Math.max(6e5, 5 * period);
-
-  let line = '', area = '', seg = [];
-  const flush = () => {
-    if (seg.length > 1) {
-      const s = seg.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join('');
-      line += s; area += s + 'L' + seg[seg.length - 1][0].toFixed(1) + ' ' + H + 'L' + seg[0][0].toFixed(1) + ' ' + H + 'Z';
-    }
-    seg = [];
-  };
-  geo = pts.map((p, i) => {
-    if (i && p[0] - pts[i - 1][0] > gap) flush();
-    const xy = [X(p[0]), Y(p[1])];
-    seg.push(xy);
-    return [xy[0] / W, xy[1] / H, p[0], p[1]];
-  });
-  flush();
-  $('line').setAttribute('d', line); $('area').setAttribute('d', area);
-
-  const g = geo[geo.length - 1], last = $('last');
-  last.style.left = g[0] * 100 + '%'; last.style.top = g[1] * 100 + '%';
-  $('ch-range').textContent = fmt(mn, m.d) + ' – ' + fmt(mx, m.d) + ' ' + m.u;
-  $('ax0').textContent = hhmm(t0); $('ax1').textContent = hhmm(t0 + span / 2); $('ax2').textContent = hhmm(t1);
-  if (animate && !reduce) restart($('svg'), 'reveal');
+function hero(d, now) {
+  const [key, txt, ic] = condition(d, now);
+  paintSky(key);
+  $('cond').textContent = txt;
+  $('cond-ic').className = 'ph-light ph-' + ic;
+  const st = stats('t'), parts = [];
+  if (st && st.n > 1) parts.push(`Máx <b>${fmt(st.mx, 0)}°</b>  Mín <b>${fmt(st.mn, 0)}°</b>`);
+  const hi = d ? heat(d.temperatura, d.umidade) : NaN;
+  if (has(hi) && hi - d.temperatura > .5) parts.push(`Sensação de ${fmt(hi, 0)}°`);
+  $('hilo').innerHTML = parts.join('<br>');
+  const r = chartT.draw('t');
+  $('t-range').textContent = r ? `${fmt(r.mn, 1)} a ${fmt(r.mx, 1)} °C` : '';
 }
 
-const plot = $('plot'), cross = $('cross');
-plot.addEventListener('pointermove', e => {
-  if (!geo.length) return;
-  const r = plot.getBoundingClientRect(), fx = (e.clientX - r.left) / r.width;
-  let best = geo[0];
-  for (const g of geo) if (Math.abs(g[0] - fx) < Math.abs(best[0] - fx)) best = g;
-  const m = M[sel];
-  cross.style.transform = 'translateX(' + best[0] * r.width + 'px)';
-  $('cross-pt').style.top = best[1] * 100 + '%';
-  $('tip').textContent = fmt(best[3], m.d) + ' ' + m.u + ' · ' + hhmm(best[2]);
-  cross.classList.toggle('flip', best[0] > .7);
-  cross.classList.add('on');
-});
-plot.addEventListener('pointerleave', () => cross.classList.remove('on'));
+function applyRow(r, d) {
+  const v = k => r[COL(k)];
+  setNum($('v-t'), v('t'), 0);
+  setNum($('v-h'), v('h'), 0);
+  $('f-h').textContent = has(v('t')) && has(v('h')) ? `Orvalho a ${fmt(dew(v('t'), v('h')), 0)}°` : '';
+  pressure(v('p'));
+  setNum($('v-l'), v('l'), 0);
+  const windSeen = hist.some(x => has(x[COL('w')]));
+  $('wind-tile').hidden = !windSeen;
+  $('bento').classList.toggle('no-wind', !windSeen);
+  setNum($('v-w'), v('w'), 0);
+  $('f-w').textContent = has(v('w')) ? beaufort(v('w')) : '';
+  gas('co', v('co')); gas('g', v('g'));
+  rain(v('r'));
+  hero(d, Date.now());
+  sunArc(Date.now());
+  if (sheet.open) fillSheet(sheetKey, false);
+}
 
-/* ---------- seleção de métrica ---------- */
-document.querySelectorAll('.metric').forEach(b => b.addEventListener('click', () => {
-  if (b.dataset.k === sel) return;
-  sel = b.dataset.k;
-  document.querySelectorAll('.metric').forEach(x => x.setAttribute('aria-pressed', x === b));
-  cross.classList.remove('on');
-  drawChart(true);
-}));
+/* ---------- detalhe ---------- */
+const sheet = $('sheet');
+let sheetKey = null, sheetFrom = null;
+function fillSheet(k) {
+  const m = M[k], s = stats(k), lastRow = hist[hist.length - 1], cur = lastRow ? lastRow[COL(k)] : null;
+  $('sh-title').innerHTML = `<i class="ph-light ph-${m.ic}"></i>${m.name}`;
+  $('sh-val').innerHTML = `${has(cur) ? fmt(cur, m.d) : '--'}<small>${m.u}</small>`;
+  $('sh-note').textContent = m.note || '';
+  $('st-min').textContent = s ? `${fmt(s.mn, m.d)} ${m.u}` : '--';
+  $('st-avg').textContent = s ? `${fmt(s.avg, m.d)} ${m.u}` : '--';
+  $('st-max').textContent = s ? `${fmt(s.mx, m.d)} ${m.u}` : '--';
+  chartS.draw(k);
+}
+function openSheet(k, from) {
+  sheetKey = k; sheetFrom = from;
+  fillSheet(k);
+  sheet.showModal();
+  if (reduce) return;
+  const a = from.getBoundingClientRect(), b = sheet.getBoundingClientRect();
+  const dx = a.left + a.width / 2 - (b.left + b.width / 2), dy = a.top + a.height / 2 - (b.top + b.height / 2);
+  sheet.animate([
+    { transform: `translate(${dx}px,${dy}px) scale(${Math.max(.3, a.width / b.width).toFixed(3)})`, opacity: 0 },
+    { transform: 'none', opacity: 1 },
+  ], { duration: 420, easing: 'cubic-bezier(.32,.72,0,1)' });
+}
+function closeSheet() {
+  if (!sheet.open) return;
+  if (reduce) { sheet.close(); return; }
+  sheet.classList.add('closing');
+  const anim = sheet.animate([{ transform: 'none', opacity: 1 }, { transform: 'scale(.96) translateY(8px)', opacity: 0 }],
+    { duration: 200, easing: 'cubic-bezier(.23,1,.32,1)' });
+  anim.onfinish = () => { sheet.close(); sheet.classList.remove('closing'); };
+}
+document.querySelectorAll('[data-k]').forEach(b => b.addEventListener('click', () => openSheet(b.dataset.k, b)));
+$('sh-x').addEventListener('click', closeSheet);
+sheet.addEventListener('cancel', e => { e.preventDefault(); closeSheet(); });
+sheet.addEventListener('click', e => { if (e.target === sheet) closeSheet(); });
+sheet.addEventListener('close', () => sheetFrom && sheetFrom.focus());
 
-/* ---------- conexão e frescor ---------- */
+/* ---------- conexão ---------- */
 function setConn(s, t) { $('dot').dataset.s = s; $('conn').textContent = t; }
 const staleMs = () => Math.max(12e4, 3 * period);
-
-function freshness() {
-  const bar = $('fresh');
-  bar.classList.remove('late');
-  if (!period || reduce) { bar.style.transform = 'scaleX(0)'; return; }
-  bar.style.transition = 'none'; bar.style.transform = 'scaleX(1)';
-  void bar.offsetWidth;
-  bar.style.transition = 'transform ' + period + 'ms linear';
-  bar.style.transform = 'scaleX(0)';
-  $('fresh-bar').title = 'Próxima leitura prevista em ~' + Math.round(period / 1000) + ' s';
-}
-
 function tick() {
-  if (!lastAt) { $('age').textContent = ''; return; }
+  if (!lastAt) return;
   const ms = Date.now() - lastAt, s = Math.round(ms / 1000);
-  $('age').textContent = s < 60 ? 'há ' + s + ' s' : s < 3600 ? 'há ' + Math.floor(s / 60) + ' min' : 'há ' + Math.floor(s / 3600) + ' h';
-  if (period && ms > period * 1.6) $('fresh').classList.add('late');
+  $('age').textContent = s < 60 ? `há ${s} s` : s < 3600 ? `há ${Math.floor(s / 60)} min` : `há ${Math.floor(s / 3600)} h`;
   const stale = ms > staleMs();
   document.body.classList.toggle('stale', stale);
   if (stale && mqttUp) setConn('off', 'Sem dados');
 }
 setInterval(tick, 1000);
+setInterval(() => { hero(lastPkt, Date.now()); sunArc(Date.now()); }, 6e4);   /* o sol anda mesmo sem pacote */
 
-/* ---------- pacote recebido ---------- */
 function update(d) {
   const now = Date.now();
   hist.push([now, ...K.map(k => {
@@ -491,37 +812,32 @@ function update(d) {
     return has(v) ? +(v * (M[k].x || 1)).toFixed(M[k].d + 1) : null;
   })]);
   save();
-  lastAt = now; period = estimatePeriod();
-
-  applyRow(hist[hist.length - 1]);
-  condition(d);
-  tempRange();
-  drawChart(false);
-
-  $('rssi').textContent = has(d.rssi) ? fmt(d.rssi, 0) + ' dBm' : '—';
-  $('snr').textContent = has(d.snr) ? fmt(d.snr, 0) + ' dB' : '—';
-
+  lastAt = now; period = estimatePeriod(); lastPkt = d;
+  applyRow(hist[hist.length - 1], d);
+  $('rssi').textContent = has(d.rssi) ? fmt(d.rssi, 0) + ' dBm' : '--';
+  $('snr').textContent = has(d.snr) ? fmt(d.snr, 0) + ' dB' : '--';
   setConn('live', 'Ao vivo');
-  if (!reduce) { restart($('dot'), 'ping'); restart($('last'), 'ping'); }
-  freshness(); tick();
-}
-
-/* ---------- inicialização: último estado salvo ---------- */
-if (hist.length) {
-  const r = hist[hist.length - 1];
-  lastAt = r[0]; period = estimatePeriod();
-  applyRow(r); tempRange(); drawChart(true);
-  $('cond').textContent = 'Última leitura às ' + hhmm(r[0]);
+  if (!reduce) { restart($('dot'), 'ping'); const p = $('plot-t').querySelector(':scope > .pt'); if (p) restart(p, 'ping'); }
   tick();
 }
 
+/* ---------- inicialização ---------- */
+if (hist.length) {
+  const r = hist[hist.length - 1];
+  lastAt = r[0]; period = estimatePeriod();
+  lastPkt = { chuva_status: r[COL('r')], lux: r[COL('l')], temperatura: r[COL('t')], umidade: r[COL('h')] };
+  applyRow(r, lastPkt);
+  $('cond').textContent = 'Última leitura às ' + hhmm(r[0]);
+  tick();
+} else {
+  hero(null, Date.now()); sunArc(Date.now());
+}
+
 if (typeof mqtt === 'undefined') { setConn('off', 'Falha ao carregar'); return; }
-const client = mqtt.connect('wss://' + MH + ':' + MP + '/mqtt',
-  { username: MU, password: MW, reconnectPeriod: 5000, connectTimeout: 10000 });
+const client = mqtt.connect(`wss://${MH}:${MP}/mqtt`, { username: MU, password: MW, reconnectPeriod: 5000, connectTimeout: 10000 });
 client.on('connect', () => {
   mqttUp = true; client.subscribe(MT);
-  if (!lastAt || Date.now() - lastAt > staleMs()) setConn('wait', 'Aguardando dados');
-  else setConn('live', 'Ao vivo');
+  if (!lastAt || Date.now() - lastAt > staleMs()) setConn('wait', 'Aguardando dados'); else setConn('live', 'Ao vivo');
 });
 client.on('message', (t, msg) => {
   let d; try { d = JSON.parse(msg.toString()); } catch (e) { return; }
