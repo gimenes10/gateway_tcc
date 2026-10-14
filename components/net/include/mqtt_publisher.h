@@ -7,6 +7,7 @@
 #include "esp_err.h"
 #include "lora_packet.h"
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 /**
@@ -25,6 +26,15 @@ esp_err_t mqtt_publisher_init(void);
  * @return ESP_OK em sucesso
  */
 esp_err_t mqtt_publish_data(const lora_packet_t *pkt, int8_t rssi, int8_t snr);
+
+/**
+ * @brief Publica o snapshot binário do histórico como mensagem retida (QoS 0).
+ *        O broker entrega a última versão a cada cliente que assina o tópico.
+ * @param buf  Snapshot no formato descrito em history.h
+ * @param len  Tamanho em bytes (até ~48 KB; o cliente fragmenta o envio)
+ * @return ESP_OK em sucesso
+ */
+esp_err_t mqtt_publish_history(const uint8_t *buf, size_t len);
 
 /**
  * @brief Retorna true se o MQTT está conectado.

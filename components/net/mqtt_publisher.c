@@ -6,11 +6,16 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/event_groups.h"
+#include <limits.h>
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
 
 static const char *TAG = "mqtt";
+
+#ifndef MQTT_TOPIC_HIST
+#define MQTT_TOPIC_HIST  "estacao/sjc/hist"   /* credentials.h antigo sem o define */
+#endif
 
 #define MQTT_CONNECTED_BIT  BIT0
 #define CONNECT_TIMEOUT_MS  15000
@@ -166,6 +171,27 @@ esp_err_t mqtt_publish_data(const lora_packet_t *pkt, int8_t rssi, int8_t snr)
     }
 
     ESP_LOGD(TAG, "MQTT pub OK (msg_id=%d, %zu bytes)", msg_id, j.len);
+    return ESP_OK;
+}
+
+esp_err_t mqtt_publish_history(const uint8_t *buf, size_t len)
+{
+    if (!s_connected || s_client == NULL) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    if (buf == NULL || len == 0 || len > INT_MAX) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    /* QoS 0 + retain: com QoS 1 o esp-mqtt copiaria o restante do payload
+       fragmentado (~48 KB) para o outbox. O snapshot é republicado a cada
+       5 min, então perder um envio não tem custo. */
+    int msg_id = esp_mqtt_client_publish(s_client, MQTT_TOPIC_HIST,
+                                         (const char *)buf, (int)len, 0, 1);
+    if (msg_id < 0) {
+        ESP_LOGE(TAG, "Falha ao publicar historico (%zu bytes)", len);
+        return ESP_FAIL;
+    }
     return ESP_OK;
 }
 

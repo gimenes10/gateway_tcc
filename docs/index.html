@@ -250,6 +250,52 @@ dialog .plot{height:210px;flex:none;margin-top:26px}
   .enter,.cloud,.drops i,.drip i,.dot.ping::after,.pt.ping,dialog::backdrop{animation:none}
   .gauge .needle,.scale .mk,.sun{transition:none}
 }
+
+/* ---------- últimos 7 dias ---------- */
+.week{max-width:1180px;margin:64px auto 0;padding:0 28px}
+.wk-hd{display:flex;align-items:center;justify-content:space-between;gap:12px 20px;flex-wrap:wrap;margin-bottom:16px}
+.wk-hd h2{font-size:26px;font-weight:400;letter-spacing:-.025em;padding-left:4px}
+.chips{display:flex;gap:4px;max-width:100%;padding:4px;border-radius:999px;overflow-x:auto;scrollbar-width:none;
+  background:rgba(8,18,36,.34);box-shadow:inset 0 0 0 1px var(--ring)}
+.chips::-webkit-scrollbar{display:none}
+.chips:empty{display:none}
+.chip{flex-shrink:0;padding:7px 14px;border-radius:999px;font-size:13px;color:var(--tx2);white-space:nowrap;cursor:pointer;
+  transition:background .2s var(--out),color .2s var(--out),transform .16s var(--out)}
+.chip:active{transform:scale(.96)}
+.chip[aria-selected=true]{background:#fff;color:#0b1730;font-weight:500}
+@media (hover:hover) and (pointer:fine){.chip:not([aria-selected=true]):hover{background:rgba(255,255,255,.08);color:#fff}}
+.wk-grid{display:grid;grid-template-columns:repeat(12,1fr);gap:14px}
+.wk-chart{grid-column:span 8;min-height:360px}
+.wk-days{grid-column:span 4}
+.wk-chart .plot{min-height:220px}
+.dsep{stroke:rgba(255,255,255,.09);stroke-width:1;vector-effect:non-scaling-stroke}
+.bar{fill:#8fc2ff}
+.wk-axis{position:relative;display:block;height:16px}
+.wk-axis span{position:absolute;top:0;transform:translateX(-50%);white-space:nowrap}
+.days{list-style:none;margin-top:6px}
+.days li{display:grid;grid-template-columns:48px minmax(0,1fr) 30px minmax(56px,1.4fr) 30px;align-items:center;gap:10px;
+  padding:11px 0;font-size:15px}
+.days li+li{box-shadow:inset 0 1px rgba(255,255,255,.08)}
+.d-name{font-weight:500}
+.d-rain{display:flex;align-items:center;gap:4px;font-size:12.5px;color:#9cc8ff;white-space:nowrap;overflow:hidden}
+.d-min{text-align:right;color:var(--tx3)}
+.d-max{text-align:right}
+.d-bar{position:relative;height:5px;border-radius:99px;background:rgba(255,255,255,.12)}
+.d-bar i{position:absolute;top:0;bottom:0;border-radius:99px}
+.d-bar b{position:absolute;top:50%;width:8px;height:8px;margin:-4px 0 0 -4px;border-radius:50%;background:#fff;
+  box-shadow:0 0 0 2px rgba(8,18,36,.6)}
+.days .d-empty{display:block;padding:24px 0;color:var(--tx3);font-size:14px}
+@media (max-width:1000px){
+  .wk-chart,.wk-days{grid-column:span 12}
+}
+@media (max-width:640px){
+  .week{margin-top:44px;padding:0 14px}
+  .wk-hd{flex-direction:column;align-items:stretch}
+  .wk-hd h2{font-size:22px}
+  .wk-chart{min-height:300px}
+  .wk-chart .plot{min-height:180px}
+  .days li{grid-template-columns:44px minmax(0,1fr) 28px minmax(48px,1.2fr) 28px;gap:8px;font-size:14px}
+}
 </style>
 </head>
 <body>
@@ -336,6 +382,24 @@ dialog .plot{height:210px;flex:none;margin-top:26px}
 
 </main>
 
+<section class="week" id="week" aria-labelledby="wk-title">
+  <div class="wk-hd">
+    <h2 id="wk-title">Últimos 7 dias</h2>
+    <div class="chips" id="wk-chips" role="tablist" aria-label="Grandeza do gráfico"></div>
+  </div>
+  <div class="wk-grid">
+    <section class="tile wk-chart" aria-label="Gráfico dos últimos 7 dias">
+      <div class="chart-hd"><span class="th" id="wk-th"><i class="ph-light ph-thermometer-simple"></i>Temperatura</span><span id="wk-range"></span></div>
+      <div class="plot" id="wk-plot"><p class="empty" id="wk-empty">Aguardando o histórico da estação.</p></div>
+      <div class="axis wk-axis" id="wk-axis"></div>
+    </section>
+    <section class="tile wk-days" aria-label="Resumo por dia">
+      <span class="th"><i class="ph-light ph-calendar-blank"></i>Resumo por dia</span>
+      <ol class="days" id="wk-days"><li class="d-empty">Aguardando o histórico da estação.</li></ol>
+    </section>
+  </div>
+</section>
+
 <footer>
   <span>Enlace LoRa 915 MHz: RSSI <span id="rssi">--</span>, SNR <span id="snr">--</span></span>
   <span>TCC 2026, Guilherme Gimenes, UNIFESP ICT. <a href="https://github.com/gimenes10/gateway_tcc" target="_blank" rel="noopener">Código-fonte</a></span>
@@ -361,7 +425,7 @@ dialog .plot{height:210px;flex:none;margin-top:26px}
 /* Credencial somente-leitura (subscribe), pública por design: o navegador conecta direto ao broker.
    Publicação usa outro usuário, definido em components/board_config/include/credentials.h */
 const MH = '9d10239851aa4a5fa45c7a5e8b7bdebd.s1.eu.hivemq.cloud', MP = 8884,
-      MU = 'webviewer', MW = '12345678', MT = 'estacao/sjc/dados';
+      MU = 'webviewer', MW = '12345678', MT = 'estacao/sjc/dados', HT = 'estacao/sjc/hist';
 
 /* Local da estação (Parque Tecnológico, SJC) e fuso fixo UTC-3 */
 const LAT = -23.16, LON = -45.79, TZ_MS = -3 * 36e5;
@@ -836,16 +900,261 @@ if (hist.length) {
 if (typeof mqtt === 'undefined') { setConn('off', 'Falha ao carregar'); return; }
 const client = mqtt.connect(`wss://${MH}:${MP}/mqtt`, { username: MU, password: MW, reconnectPeriod: 5000, connectTimeout: 10000 });
 client.on('connect', () => {
-  mqttUp = true; client.subscribe(MT);
+  mqttUp = true; client.subscribe([MT, HT]);
   if (!lastAt || Date.now() - lastAt > staleMs()) setConn('wait', 'Aguardando dados'); else setConn('live', 'Ao vivo');
 });
 client.on('message', (t, msg) => {
+  /* Snapshot binário de 7 dias: tratado pela seção "Últimos 7 dias" */
+  if (t === HT) { document.dispatchEvent(new CustomEvent('estacao:hist', { detail: msg })); return; }
   let d; try { d = JSON.parse(msg.toString()); } catch (e) { return; }
   if (d && typeof d === 'object') update(d);
 });
 client.on('reconnect', () => setConn('wait', 'Reconectando'));
 client.on('offline', () => { mqttUp = false; setConn('off', 'Offline'); });
 client.on('error', () => setConn('off', 'Erro de conexão'));
+})();
+</script>
+<script>
+/* ---------- Últimos 7 dias: snapshot binário publicado pelo gateway (estacao/sjc/hist) ---------- */
+(() => {
+'use strict';
+
+const DAY = 864e5, HOUR = 36e5, TZ_MS = -3 * HOUR, SPAN = 7 * DAY, W = 1000, H = 200;
+const $ = id => document.getElementById(id);
+const has = v => typeof v === 'number' && isFinite(v);
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const nf = {};
+const fmt = (v, d) => (nf[d] ||= new Intl.NumberFormat('pt-BR',
+  { minimumFractionDigits: d, maximumFractionDigits: d })).format(v).replace('-', '−');
+const SP = { timeZone: 'America/Sao_Paulo' };
+const fWd = new Intl.DateTimeFormat('pt-BR', { weekday: 'short', ...SP });
+const fTip = new Intl.DateTimeFormat('pt-BR', { weekday: 'short', hour: '2-digit', minute: '2-digit', ...SP });
+const weekday = ts => { const s = fWd.format(ts).replace('.', ''); return s[0].toUpperCase() + s.slice(1); };
+const dayKey = ts => Math.floor((ts + TZ_MS) / DAY);
+const dayStart = k => k * DAY - TZ_MS;
+const dur = min => min < 60 ? `${Math.round(min)} min` : `${Math.floor(min / 60)} h${Math.round(min % 60) ? ' ' + Math.round(min % 60) : ''}`;
+
+/* ---------- decodificação (formato em components/history/include/history.h) ---------- */
+function crc8(u8, o, n) {
+  let c = 0;
+  for (let i = 0; i < n; i++) {
+    c ^= u8[o + i];
+    for (let b = 0; b < 8; b++) c = c & 0x80 ? ((c << 1) ^ 0x07) & 0xff : (c << 1) & 0xff;
+  }
+  return c;
+}
+function decode(msg) {
+  const u8 = msg instanceof Uint8Array ? msg : new Uint8Array(msg);
+  if (u8.byteLength < 8 || u8[0] !== 0x48 || u8[1] !== 0x53 || u8[2] !== 1) return null;
+  const dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
+  const rs = u8[3], period = dv.getUint16(4, true), n = dv.getUint16(6, true);
+  if (rs < 24 || 8 + n * rs > u8.byteLength) return null;
+  const u16 = (o, s) => { const v = dv.getUint16(o, true); return v === 0xffff ? null : v / s; };
+  const rows = [];
+  for (let i = 0; i < n; i++) {
+    const o = 8 + i * rs;
+    if (crc8(u8, o, 23) !== u8[o + 23] || dv.getUint32(o, true) < 1700000000) continue;
+    const t = dv.getInt16(o + 4, true), rp = u8[o + 22];
+    rows.push({
+      ts: dv.getUint32(o, true) * 1000,
+      t: t === -32768 ? null : t / 100,
+      h: u16(o + 6, 10), p: u16(o + 8, 10), l: u16(o + 10, 1),
+      co: u16(o + 12, 1000), g: u16(o + 14, 1000),
+      w: u16(o + 16, 10 / 3.6), gu: u16(o + 18, 10 / 3.6),     /* m/s ×10 -> km/h */
+      mm: u16(o + 20, 10), rp: rp === 0xff ? null : rp,
+    });
+  }
+  return { rows, period: period * 1000 };
+}
+
+/* ---------- grandezas ---------- */
+const M = {
+  t:  { chip: 'Temperatura', name: 'Temperatura',         ic: 'thermometer-simple', u: '°C',   d: 1 },
+  h:  { chip: 'Umidade',     name: 'Umidade',             ic: 'drop',               u: '%',    d: 0 },
+  p:  { chip: 'Pressão',     name: 'Pressão',             ic: 'gauge',              u: 'hPa',  d: 1 },
+  l:  { chip: 'Luz',         name: 'Luminosidade',        ic: 'sun',                u: 'lux',  d: 0 },
+  r:  { chip: 'Chuva',       name: 'Chuva por hora',      ic: 'cloud-rain',         bars: true },
+  w:  { chip: 'Vento',       name: 'Vento',               ic: 'wind',               u: 'km/h', d: 0 },
+  co: { chip: 'CO',          name: 'Monóxido de carbono', ic: 'factory',            u: 'V',    d: 2 },
+  g:  { chip: 'Gases',       name: 'Gases combustíveis',  ic: 'factory',            u: 'V',    d: 2 },
+};
+const TCOL = [[5, '#7ab8ff'], [14, '#62d3e8'], [21, '#9be37a'], [26, '#ffd25a'], [31, '#ff9a4a'], [37, '#ff5a4a']];
+function tcolor(t) {
+  const hex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+  if (t <= TCOL[0][0]) return TCOL[0][1];
+  for (let i = 1; i < TCOL.length; i++) {
+    if (t <= TCOL[i][0]) {
+      const [t0, c0] = TCOL[i - 1], [t1, c1] = TCOL[i], k = (t - t0) / (t1 - t0);
+      const a = hex(c0), b = hex(c1);
+      return `rgb(${a.map((v, j) => Math.round(v + (b[j] - v) * k)).join(',')})`;
+    }
+  }
+  return TCOL[TCOL.length - 1][1];
+}
+
+let rows = [], period = 3e5, sel = 't', geo = [], got = false;
+
+/* Chuva: mm do pluviômetro quando existe; senão minutos com chuva no FC-22 */
+const gaugeOn = () => rows.some(r => has(r.mm));
+const rainOf = r => gaugeOn() ? r.mm : (has(r.rp) ? r.rp / 100 * period / 6e4 : null);
+const available = k => k === 'r' ? rows.some(r => has(r.mm) || has(r.rp)) : rows.some(r => has(r[k]));
+
+/* ---------- seletor ---------- */
+function chips() {
+  const keys = Object.keys(M).filter(available);
+  if (!keys.includes(sel)) sel = keys[0] || 't';
+  $('wk-chips').innerHTML = keys.map(k =>
+    `<button class="chip" role="tab" data-w="${k}" aria-selected="${k === sel}">${M[k].chip}</button>`).join('');
+}
+$('wk-chips').addEventListener('click', e => {
+  const b = e.target.closest('.chip');
+  if (!b || b.dataset.w === sel) return;
+  sel = b.dataset.w;
+  $('wk-chips').querySelectorAll('.chip').forEach(c => c.setAttribute('aria-selected', c === b));
+  draw(true);
+});
+
+/* ---------- gráfico ---------- */
+function draw(fade) {
+  const m = M[sel], now = Date.now(), t0 = now - SPAN, X = ts => (ts - t0) / SPAN * W;
+  $('wk-th').innerHTML = `<i class="ph-light ph-${m.ic}"></i>${m.name}`;
+
+  /* meia-noite local separa os dias; rótulo no centro da parte visível de cada dia */
+  let sep = '', ax = '';
+  for (let k = dayKey(t0); k <= dayKey(now); k++) {
+    const a = Math.max(dayStart(k), t0), b = Math.min(dayStart(k + 1), now);
+    if (dayStart(k) > t0) sep += `<line class="dsep" x1="${X(dayStart(k)).toFixed(1)}" x2="${X(dayStart(k)).toFixed(1)}" y1="0" y2="${H}"/>`;
+    if (b - a >= 6 * HOUR) ax += `<span style="left:${(X((a + b) / 2) / 10).toFixed(2)}%">${k === dayKey(now) ? 'Hoje' : weekday(a + 1)}</span>`;
+  }
+  $('wk-axis').innerHTML = ax;
+
+  let body = '', range = '', pts = [];
+  if (m.bars) {
+    const byHour = new Map();
+    for (const r of rows) {
+      const v = rainOf(r);
+      if (!has(v) || r.ts < t0) continue;
+      const hk = Math.floor(r.ts / HOUR) * HOUR;
+      byHour.set(hk, (byHour.get(hk) || 0) + v);
+    }
+    const mm = gaugeOn(), unit = mm ? 'mm' : 'min';
+    let mx = 0, tot = 0;
+    for (const v of byHour.values()) { mx = Math.max(mx, v); tot += v; }
+    const top = Math.max(mx, mm ? 1 : 15), bw = X(t0 + HOUR) - X(t0);
+    for (const [hk, v] of byHour) {
+      if (v <= 0) continue;
+      const h = v / top * (H - 8);
+      body += `<rect class="bar" x="${(X(hk) + bw * .12).toFixed(1)}" y="${(H - h).toFixed(1)}" width="${(bw * .76).toFixed(1)}" height="${h.toFixed(1)}" rx="1.5"/>`;
+      pts.push([X(hk + HOUR / 2) / W, (H - h) / H, hk, v, unit]);
+    }
+    range = byHour.size ? (mm ? `Total ${fmt(tot, 1)} mm` : `${dur(tot)} com chuva`) : '';
+  } else {
+    const s = rows.filter(r => has(r[sel]) && r.ts >= t0).map(r => [r.ts, r[sel]]);
+    if (s.length > 1) {
+      let mn = Infinity, mx = -Infinity;
+      for (const [, v] of s) { mn = Math.min(mn, v); mx = Math.max(mx, v); }
+      const pad = (mx - mn) * .15 || Math.max(Math.abs(mx) * .01, .5), lo = mn - pad, hi = mx + pad;
+      const Y = v => H - (v - lo) / (hi - lo) * H, gap = Math.max(9e5, 3 * period);
+      let line = '', area = '', seg = [];
+      const flush = () => {
+        if (seg.length > 1) {
+          const d = seg.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join('');
+          line += d; area += d + `L${seg[seg.length - 1][0].toFixed(1)} ${H}L${seg[0][0].toFixed(1)} ${H}Z`;
+        }
+        seg = [];
+      };
+      s.forEach(([ts, v], i) => {
+        if (i && ts - s[i - 1][0] > gap) flush();
+        const p = [X(ts), Y(v)]; seg.push(p);
+        pts.push([p[0] / W, p[1] / H, ts, v]);
+      });
+      flush();
+      const stops = sel === 't'
+        ? TCOL.map(([tv, c]) => [Math.min(1, Math.max(0, Y(tv) / H)), c]).sort((a, b) => a[0] - b[0])
+            .map(([o, c]) => `<stop offset="${o.toFixed(3)}" stop-color="${c}"/>`).join('')
+        : '<stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#fff"/>';
+      body = `<defs><linearGradient id="wk-s" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="${H}">${stops}</linearGradient>
+          <linearGradient id="wk-f" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".14"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient></defs>
+        <path d="${area}" fill="url(#wk-f)"/><path class="line" d="${line}" stroke="url(#wk-s)"/>`;
+      range = `${fmt(mn, m.d)} a ${fmt(mx, m.d)} ${m.u}`;
+    }
+  }
+  geo = pts;
+
+  const empty = !pts.length;
+  $('wk-range').textContent = range;
+  $('wk-plot').innerHTML =
+    `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">${sep}${body}</svg>
+     <div class="cross"><span class="pt"></span><span class="tip"></span></div>
+     <p class="empty"${empty ? '' : ' hidden'}>Sem dados desta grandeza na semana.</p>`;
+  if (fade && !reduce) $('wk-plot').querySelector('svg').animate([{ opacity: 0 }, { opacity: 1 }], { duration: 220, easing: 'cubic-bezier(.23,1,.32,1)' });
+}
+
+const plot = $('wk-plot');
+plot.addEventListener('pointermove', e => {
+  if (!geo.length) return;
+  const r = plot.getBoundingClientRect(), fx = (e.clientX - r.left) / r.width;
+  let b = geo[0];
+  for (const g of geo) if (Math.abs(g[0] - fx) < Math.abs(b[0] - fx)) b = g;
+  const m = M[sel], cross = plot.querySelector('.cross');
+  cross.style.transform = `translateX(${b[0] * r.width}px)`;
+  cross.querySelector('.pt').style.top = b[1] * 100 + '%';
+  cross.querySelector('.tip').textContent = m.bars
+    ? `${b[4] === 'mm' ? fmt(b[3], 1) + ' mm' : dur(b[3])}, ${fTip.format(b[2])}`
+    : `${fmt(b[3], m.d)} ${m.u}, ${fTip.format(b[2])}`;
+  cross.classList.toggle('flip', b[0] > .68);
+  cross.classList.add('on');
+});
+plot.addEventListener('pointerleave', () => { const c = plot.querySelector('.cross'); if (c) c.classList.remove('on'); });
+
+/* ---------- resumo por dia ---------- */
+function days() {
+  const now = Date.now(), map = new Map();
+  for (const r of rows) {
+    if (r.ts < now - SPAN) continue;
+    const k = dayKey(r.ts);
+    if (!map.has(k)) map.set(k, { mn: Infinity, mx: -Infinity, rain: 0, rainSeen: false, last: null });
+    const d = map.get(k);
+    if (has(r.t)) { d.mn = Math.min(d.mn, r.t); d.mx = Math.max(d.mx, r.t); d.last = r.t; }
+    const v = rainOf(r);
+    if (has(v)) { d.rain += v; d.rainSeen = true; }
+  }
+  if (!map.size) { $('wk-days').innerHTML = '<li class="d-empty">Sem registros na semana.</li>'; return; }
+
+  const list = [...map.entries()].sort((a, b) => b[0] - a[0]);
+  let wmn = Infinity, wmx = -Infinity;
+  for (const [, d] of list) if (d.mx > -Infinity) { wmn = Math.min(wmn, d.mn); wmx = Math.max(wmx, d.mx); }
+  const span = Math.max(wmx - wmn, 1), pos = t => ((t - wmn) / span * 100).toFixed(1);
+  const today = dayKey(now), mm = gaugeOn();
+
+  $('wk-days').innerHTML = list.map(([k, d]) => {
+    const name = k === today ? 'Hoje' : k === today - 1 ? 'Ontem' : weekday(dayStart(k) + HOUR);
+    const rain = d.rainSeen && d.rain >= (mm ? .1 : 5)
+      ? `<i class="ph-light ph-drop"></i>${mm ? fmt(d.rain, 1) + ' mm' : dur(d.rain)}` : '';
+    if (d.mx === -Infinity) return `<li><span class="d-name">${name}</span><span class="d-rain">${rain}</span><span class="d-min">--</span><span class="d-bar"></span><span class="d-max">--</span></li>`;
+    const dot = k === today && has(d.last) ? `<b style="left:${pos(d.last)}%"></b>` : '';
+    return `<li><span class="d-name">${name}</span><span class="d-rain">${rain}</span>
+      <span class="d-min">${fmt(d.mn, 0)}°</span>
+      <span class="d-bar"><i style="left:${pos(d.mn)}%;right:${(100 - pos(d.mx)).toFixed(1)}%;background:linear-gradient(90deg,${tcolor(d.mn)},${tcolor(d.mx)})"></i>${dot}</span>
+      <span class="d-max">${fmt(d.mx, 0)}°</span></li>`;
+  }).join('');
+}
+
+/* ---------- entrada ---------- */
+document.addEventListener('estacao:hist', e => {
+  const h = decode(e.detail);
+  if (!h) return;
+  rows = h.rows; period = h.period;
+  const first = !got; got = true;
+  chips(); draw(first); days();
+});
+/* Sem snapshot retido no broker: gateway ainda sem o histórico ou desligado há mais de 3 dias */
+setTimeout(() => {
+  if (got) return;
+  const msg = 'O histórico aparece quando o gateway publicar o primeiro resumo de 5 minutos.';
+  $('wk-empty').textContent = msg;
+  $('wk-days').innerHTML = `<li class="d-empty">${msg}</li>`;
+}, 12000);
 })();
 </script>
 </body>

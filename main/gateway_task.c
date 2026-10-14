@@ -7,6 +7,8 @@
 #include "lora_packet.h"
 #include "wifi_manager.h"
 #include "mqtt_publisher.h"
+#include "time_sync.h"
+#include "history.h"
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -67,6 +69,13 @@ esp_err_t gateway_init(void)
         oled_update(&oled);
     }
 
+    /* 3b. Relógio via SNTP: data os registros do histórico.
+           Sem sincronizar, o gateway segue e o histórico espera o relógio. */
+    ret = time_sync_init();
+    if (ret != ESP_OK) {
+        ESP_LOGW(TAG, "SNTP indisponivel: historico aguarda o relogio");
+    }
+
     /* 4. MQTT */
     ret = mqtt_publisher_init();
     if (ret != ESP_OK) {
@@ -77,6 +86,13 @@ esp_err_t gateway_init(void)
         oled_draw_text(&oled, 0, 4, "MQTT OK!");
         oled_draw_text(&oled, 0, 5, "Iniciando LoRa...");
         oled_update(&oled);
+    }
+
+    /* 4b. Histórico de 7 dias (flash + snapshot retido no MQTT).
+           Falha aqui não impede o repasse ao vivo. */
+    ret = history_init(mqtt_publish_history);
+    if (ret != ESP_OK) {
+        ESP_LOGW(TAG, "Historico desativado: %s", esp_err_to_name(ret));
     }
 
     /* 5. LoRa SX1262 */
@@ -269,7 +285,10 @@ void gateway_task(void *arg)
             ESP_LOGW(TAG, "MQTT publish falhou");
         }
 
-        /* 3. Atualiza OLED */
+        /* 3. Histórico de 7 dias (agrega em 5 min; independe do MQTT estar no ar) */
+        history_add(&pkt);
+
+        /* 4. Atualiza OLED */
         update_oled(&pkt, rssi, snr, mqtt_ok);
     }
 }
