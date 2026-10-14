@@ -580,11 +580,12 @@ function paintSky(key) {
 }
 function rainLayer(on) {
   const box = $('drops');
-  if (!on || reduce) { box.innerHTML = ''; return; }
+  if (!on) { box.innerHTML = ''; return; }
   if (box.childElementCount) return;
+  /* Com movimento reduzido as gotas ficam paradas, espalhadas pela tela: a chuva continua visível */
   let h = '';
   for (let i = 0; i < 70; i++)
-    h += `<i style="left:${(Math.random() * 110).toFixed(1)}%;--d:${(.55 + Math.random() * .45).toFixed(2)}s;--w:-${(Math.random() * 2).toFixed(2)}s;opacity:${(.35 + Math.random() * .6).toFixed(2)}"></i>`;
+    h += `<i style="left:${(Math.random() * 110).toFixed(1)}%;${reduce ? `top:${(Math.random() * 100).toFixed(1)}vh;` : ''}--d:${(.55 + Math.random() * .45).toFixed(2)}s;--w:-${(Math.random() * 2).toFixed(2)}s;opacity:${(.35 + Math.random() * .6).toFixed(2)}"></i>`;
   box.innerHTML = h;
 }
 (function stars() {
@@ -597,7 +598,7 @@ function rainLayer(on) {
 (function drips() {
   let h = '';
   for (let i = 0; i < 14; i++)
-    h += `<i style="left:${(4 + Math.random() * 92).toFixed(1)}%;--d:${(.7 + Math.random() * .5).toFixed(2)}s;--w:-${(Math.random() * 1.2).toFixed(2)}s"></i>`;
+    h += `<i style="left:${(4 + Math.random() * 92).toFixed(1)}%;${reduce ? `top:${(Math.random() * 85).toFixed(1)}%;` : ''}--d:${(.7 + Math.random() * .5).toFixed(2)}s;--w:-${(Math.random() * 1.2).toFixed(2)}s"></i>`;
   $('drip').innerHTML = h;
 })();
 document.addEventListener('visibilitychange', () => $('sky').classList.toggle('paused', document.hidden));
