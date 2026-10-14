@@ -75,8 +75,10 @@ button{font:inherit;color:inherit;background:none;border:0;text-align:left}
 
 /* ---------- grade ---------- */
 .bento{display:grid;grid-template-columns:repeat(12,1fr);gap:14px;max-width:1180px;margin:0 auto;padding:40px 28px 0}
-.hero{grid-column:span 5;display:flex;flex-direction:column;justify-content:flex-end;padding:8px 8px 10px;min-height:300px}
-.c-chart{grid-column:span 7}
+.hero{grid-column:1/-1;display:flex;flex-direction:column;align-items:center;text-align:center;padding:20px 12px 22px;
+  border-radius:var(--r);cursor:pointer;transition:background .25s var(--out),transform .16s var(--out)}
+.hero:active{transform:scale(.99)}
+@media (hover:hover) and (pointer:fine){.hero:hover{background:rgba(255,255,255,.04)}.hero:hover .hint{background:rgba(255,255,255,.14);color:#fff}}
 .c3{grid-column:span 3}
 .c6{grid-column:span 6}
 .no-wind .c-rain{grid-column:span 6}
@@ -99,17 +101,19 @@ button.tile:active,.gas:active{transform:scale(.98)}
 .na{color:var(--tx3)}
 
 /* hero */
-.temp{font-size:clamp(104px,12.5vw,152px);font-weight:200;line-height:.86;letter-spacing:-.065em;margin-left:-.04em}
+.temp{font-size:clamp(104px,12.5vw,152px);font-weight:200;line-height:.86;letter-spacing:-.065em;padding-left:.46em}   /* compensa o °C para centralizar os dígitos */
 .temp sup{font-size:.42em;font-weight:200;color:var(--tx2);vertical-align:.95em;margin-left:.04em;letter-spacing:0}
-.cond{display:flex;align-items:center;gap:10px;margin-top:18px;font-size:24px;font-weight:400;letter-spacing:-.015em}
+.cond{display:inline-flex;align-items:center;gap:10px;margin-top:18px;font-size:24px;font-weight:400;letter-spacing:-.015em}
 .cond i{font-size:30px}
 .hilo{margin-top:6px;font-size:16px;color:var(--tx2)}
 .hilo b{font-weight:500;color:var(--tx)}
+.hint{display:inline-flex;align-items:center;gap:6px;margin-top:16px;padding:5px 12px;border-radius:999px;font-size:12.5px;
+  color:var(--tx2);background:rgba(255,255,255,.08);transition:background .2s var(--out),color .2s var(--out)}
+.hint i{font-size:14px}
 
 /* gráfico */
 .chart-hd{display:flex;justify-content:space-between;align-items:center;gap:12px}
-.chart-hd span:last-child{font-size:13px;color:var(--tx2);transition:opacity .15s var(--out)}
-.c-chart:has(.cross.on) #t-range{opacity:0}
+.chart-hd span:last-child{font-size:13px;color:var(--tx2)}
 .plot{position:relative;flex:1;min-height:150px;margin-top:18px;touch-action:pan-y;cursor:crosshair}
 .plot svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
 .plot .line{fill:none;stroke-width:2.2;stroke-linejoin:round;stroke-linecap:round;vector-effect:non-scaling-stroke}
@@ -216,21 +220,18 @@ dialog .plot{height:210px;flex:none;margin-top:26px}
 /* ---------- responsivo ---------- */
 @media (max-width:1000px){
   .bento{grid-template-columns:repeat(6,1fr)}
-  .hero,.c-chart,.c6{grid-column:span 6}
-  .hero{min-height:0;padding-top:12px}
-  .c-chart{min-height:260px}
+  .hero,.c6{grid-column:span 6}
 }
 @media (max-width:640px){
   .bento{grid-template-columns:repeat(2,1fr);gap:10px;padding:24px 14px 0}
-  .hero,.c-chart,.c6,.tile.c-rain{grid-column:span 2}
+  .hero,.c6,.tile.c-rain{grid-column:span 2}
   .c-rain .rain-st{font-size:28px}
   .tile.c-wind{grid-column:span 2;min-height:0;display:grid;grid-template-columns:1fr auto;align-items:end}
   .c-wind .th{grid-column:1/-1}
   .c-wind .foot{padding-top:0}
   .c3{grid-column:span 1}
-  .c-chart{order:1;min-height:250px}
   .c6{order:2}
-  .hero{padding:4px 4px 6px}
+  .hero{padding:12px 8px 16px}
   .temp{font-size:96px}
   .cond{font-size:21px;margin-top:14px}
   .rain-ic{font-size:34px}
@@ -315,17 +316,12 @@ dialog .plot{height:210px;flex:none;margin-top:26px}
 
 <main class="bento" id="bento">
 
-  <section class="hero enter" style="--i:0" aria-label="Agora">
-    <div class="temp"><span id="v-t">--</span><sup>°C</sup></div>
-    <p class="cond"><i class="ph-light ph-cloud" id="cond-ic"></i><span id="cond">Aguardando a estação</span></p>
-    <p class="hilo" id="hilo"></p>
-  </section>
-
-  <section class="tile c-chart enter" style="--i:1" aria-label="Temperatura nas últimas 24 horas">
-    <div class="chart-hd"><span class="th"><i class="ph-light ph-thermometer-simple"></i>Temperatura, 24 h</span><span id="t-range"></span></div>
-    <div class="plot" id="plot-t"></div>
-    <div class="axis" id="axis-t"></div>
-  </section>
+  <button class="hero enter" style="--i:0" data-k="t" aria-label="Temperatura agora; abrir as últimas 24 horas">
+    <span class="temp"><span id="v-t">--</span><sup>°C</sup></span>
+    <span class="cond"><i class="ph-light ph-cloud" id="cond-ic"></i><span id="cond">Aguardando a estação</span></span>
+    <span class="hilo" id="hilo"></span>
+    <span class="hint"><i class="ph-light ph-chart-line"></i>Últimas 24 h</span>
+  </button>
 
   <section class="tile c3 c-rain enter" style="--i:2" id="rain-tile" aria-label="Chuva">
     <span class="drip" id="drip"></span>
@@ -439,7 +435,7 @@ const M = {
   p:  { f: 'pressao',     name: 'Pressão',             u: 'hPa',  d: 1, ic: 'gauge',
         note: 'Queda contínua de pressão costuma anteceder mudança de tempo.' },
   l:  { f: 'lux',         name: 'Luminosidade',        u: 'lux',  d: 0, ic: 'sun',
-        note: 'O BH1750 satura perto de 55 mil lux sob sol forte.' },
+        note: () => skyNote() },
   w:  { f: 'vento_ms',    name: 'Vento',               u: 'km/h', d: 0, ic: 'wind', x: 3.6,
         note: 'Velocidade medida pelo anemômetro de conchas.' },
   co: { f: 'mq7_voltage', name: 'Monóxido de carbono', u: 'V',    d: 2, ic: 'factory',
@@ -533,19 +529,47 @@ const SKY = {
   night:    ['#050b1a', '#0b1730', '#16264d', .04, .9],
   nrain:    ['#070c15', '#101824', '#1a2431', .3, 0],
 };
+/* Classificação do céu pelo índice de céu claro (kc = lux medido / lux esperado sem nuvens
+   para a altura do sol) e pela variabilidade de kc nos últimos 30 min. Nuvens esparsas
+   fazem o sol aparecer e sumir, então kc oscila; céu claro ou encoberto deixa kc estável.
+   Faixas: kc > 0,7 céu claro; kc < 0,2 encoberto (limiares usuais na literatura de
+   radiação solar). Termos seguem o vocabulário do INMET/CPTEC. */
+const LUX_GAIN = 1;   /* corrige a atenuação do difusor/caixa do BH1750, se houver */
+const KC_VAR = .1;    /* variação média de kc entre leituras acima disso = sol entre nuvens */
+function clearIndex(lux, t) {
+  const e = clearLux(sunElev(t));
+  return has(lux) && e > 0 ? lux * LUX_GAIN / e : NaN;
+}
+function kcVariability(now) {
+  const c = COL('l'), k = hist.filter(r => r[0] >= now - 18e5 && has(r[c]))
+    .map(r => clearIndex(r[c], r[0])).filter(isFinite);
+  if (k.length < 4) return NaN;
+  let s = 0;
+  for (let i = 1; i < k.length; i++) s += Math.abs(k[i] - k[i - 1]);
+  return s / (k.length - 1);
+}
 function condition(d, now) {
   const el = sunElev(now), raining = d && d.chuva_status === 1, lux = d && d.lux;
   if (raining) return el < -6 ? ['nrain', 'Chovendo', 'cloud-rain'] : ['rain', 'Chovendo', 'cloud-rain'];
   if (el < -6) return ['night', 'Noite', 'moon-stars'];
-  if (el < 5) {
+  if (el < 6) {   /* sol baixo: kc pouco confiável, vale o horário */
     const morning = ((now + TZ_MS) % DAY) < DAY / 2;
     return ['dusk', morning ? 'Amanhecendo' : 'Entardecendo', 'sun-horizon'];
   }
-  if (!has(lux)) return ['partly', 'Dia', 'cloud-sun'];
-  const r = lux / clearLux(el);
-  if (r > .55) return ['clear', 'Céu limpo', 'sun'];
-  if (r > .22) return ['partly', 'Parcialmente nublado', 'cloud-sun'];
-  return ['overcast', 'Nublado', 'cloud'];
+  const kc = clearIndex(lux, now);
+  if (!has(kc)) return ['partly', 'Dia', 'cloud-sun'];
+  const varies = kcVariability(now) > KC_VAR;
+  if (kc >= .7) return varies ? ['partly', 'Sol entre nuvens', 'cloud-sun']
+                     : el >= 40 ? ['clear', 'Sol forte', 'sun'] : ['clear', 'Céu claro', 'sun'];
+  if (kc >= .4) return varies ? ['partly', 'Sol entre nuvens', 'cloud-sun'] : ['partly', 'Sol fraco', 'sun-dim'];
+  if (kc >= .2) return ['overcast', 'Muitas nuvens', 'cloud'];
+  return ['overcast', 'Encoberto', 'cloud'];
+}
+function skyNote() {
+  const r = hist[hist.length - 1], kc = r ? clearIndex(r[COL('l')], r[0]) : NaN;
+  return has(kc)
+    ? `Índice de céu claro ${fmt(kc, 2)}: a luz medida dividida pela esperada sem nuvens para a altura do sol. Acima de 0,7 é céu claro; abaixo de 0,2, encoberto.`
+    : 'O índice de céu claro só é calculado com o sol acima do horizonte.';
 }
 function paintSky(key) {
   const [a, b, c, cl, st] = SKY[key], s = $('sky').style;
@@ -674,7 +698,6 @@ function makeChart(root, axis) {
     },
   };
 }
-const chartT = makeChart($('plot-t'), $('axis-t'));
 const chartS = makeChart($('plot-sh'), $('axis-sh'));
 
 /* ---------- blocos ---------- */
@@ -793,8 +816,6 @@ function hero(d, now) {
   const hi = d ? heat(d.temperatura, d.umidade) : NaN;
   if (has(hi) && hi - d.temperatura > .5) parts.push(`Sensação de ${fmt(hi, 0)}°`);
   $('hilo').innerHTML = parts.join('<br>');
-  const r = chartT.draw('t');
-  $('t-range').textContent = r ? `${fmt(r.mn, 1)} a ${fmt(r.mx, 1)} °C` : '';
 }
 
 function applyRow(r, d) {
@@ -823,7 +844,7 @@ function fillSheet(k) {
   const m = M[k], s = stats(k), lastRow = hist[hist.length - 1], cur = lastRow ? lastRow[COL(k)] : null;
   $('sh-title').innerHTML = `<i class="ph-light ph-${m.ic}"></i>${m.name}`;
   $('sh-val').innerHTML = `${has(cur) ? fmt(cur, m.d) : '--'}<small>${m.u}</small>`;
-  $('sh-note').textContent = m.note || '';
+  $('sh-note').textContent = (typeof m.note === 'function' ? m.note() : m.note) || '';
   $('st-min').textContent = s ? `${fmt(s.mn, m.d)} ${m.u}` : '--';
   $('st-avg').textContent = s ? `${fmt(s.avg, m.d)} ${m.u}` : '--';
   $('st-max').textContent = s ? `${fmt(s.mx, m.d)} ${m.u}` : '--';
@@ -876,26 +897,47 @@ function update(d) {
     return has(v) ? +(v * (M[k].x || 1)).toFixed(M[k].d + 1) : null;
   })]);
   save();
-  lastAt = now; period = estimatePeriod(); lastPkt = d;
+  lastAt = now; period = estimatePeriod(); lastPkt = d; liveSeen = true;
   applyRow(hist[hist.length - 1], d);
   $('rssi').textContent = has(d.rssi) ? fmt(d.rssi, 0) + ' dBm' : '--';
   $('snr').textContent = has(d.snr) ? fmt(d.snr, 0) + ' dB' : '--';
   setConn('live', 'Ao vivo');
-  if (!reduce) { restart($('dot'), 'ping'); const p = $('plot-t').querySelector(':scope > .pt'); if (p) restart(p, 'ping'); }
+  if (!reduce) restart($('dot'), 'ping');
   tick();
 }
 
 /* ---------- inicialização ---------- */
-if (hist.length) {
+let liveSeen = false;   /* já chegou pacote ao vivo nesta sessão */
+function showLast() {
   const r = hist[hist.length - 1];
   lastAt = r[0]; period = estimatePeriod();
   lastPkt = { chuva_status: r[COL('r')], lux: r[COL('l')], temperatura: r[COL('t')], umidade: r[COL('h')] };
   applyRow(r, lastPkt);
   $('cond').textContent = 'Última leitura às ' + hhmm(r[0]);
   tick();
-} else {
-  hero(null, Date.now()); sunArc(Date.now());
 }
+if (hist.length) showLast(); else { hero(null, Date.now()); sunArc(Date.now()); }
+
+/* Histórico do gateway (resumos de 5 min) preenche as 24 h onde este navegador não
+   tem leitura própria; as leituras ao vivo, mais finas, têm prioridade. */
+document.addEventListener('estacao:hist-rows', e => {
+  const { rows, period: step } = e.detail, lim = Date.now() - DAY, add = [];
+  const ts = hist.map(r => r[0]);
+  const covered = (a, b) => {   /* há leitura local em [a, b)? busca binária em ts ordenado */
+    let lo = 0, hi = ts.length;
+    while (lo < hi) { const m = (lo + hi) >> 1; if (ts[m] < a) lo = m + 1; else hi = m; }
+    return lo < ts.length && ts[lo] < b;
+  };
+  for (const s of rows) {
+    if (s.ts + step < lim || covered(s.ts, s.ts + step)) continue;
+    add.push([s.ts + step / 2, s.t, s.h, s.p, s.l, s.w, s.co, s.g, has(s.rp) ? (s.rp > 0 ? 1 : 0) : null]);
+  }
+  if (!add.length) return;
+  hist = hist.concat(add).sort((a, b) => a[0] - b[0]);
+  save();
+  if (!liveSeen) showLast();
+  else { period = estimatePeriod(); applyRow(hist[hist.length - 1], lastPkt); }
+});
 
 if (typeof mqtt === 'undefined') { setConn('off', 'Falha ao carregar'); return; }
 const client = mqtt.connect(`wss://${MH}:${MP}/mqtt`, { username: MU, password: MW, reconnectPeriod: 5000, connectTimeout: 10000 });
@@ -1147,6 +1189,8 @@ document.addEventListener('estacao:hist', e => {
   rows = h.rows; period = h.period;
   const first = !got; got = true;
   chips(); draw(first); days();
+  /* repassa para o painel principal completar as últimas 24 h */
+  document.dispatchEvent(new CustomEvent('estacao:hist-rows', { detail: h }));
 });
 /* Sem snapshot retido no broker: gateway ainda sem o histórico ou desligado há mais de 3 dias */
 setTimeout(() => {
