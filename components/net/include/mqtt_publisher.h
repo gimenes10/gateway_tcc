@@ -20,7 +20,7 @@ esp_err_t mqtt_publisher_init(void);
 /**
  * @brief Publica os dados de um pacote no tópico MQTT como JSON.
  *        Campos de sensores sem bit em `pkt->valid` são publicados como null.
- * @param pkt   Pacote decodificado (v2)
+ * @param pkt   Pacote decodificado (v4)
  * @param rssi  RSSI do LoRa em dBm
  * @param snr   SNR do LoRa em dB
  * @return ESP_OK em sucesso

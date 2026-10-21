@@ -31,9 +31,9 @@ typedef struct __attribute__((packed)) {
     int16_t  temp_c100;
     uint16_t hum_x10;
     uint16_t press_x10;
-    uint16_t lux;
-    uint16_t mq7_mv;
-    uint16_t mq2_mv;
+    uint16_t lux_2;
+    uint16_t gas_kohm_x10;
+    uint16_t dust_ugm3;
     uint16_t wind_x10;
     uint16_t gust_x10;
     uint16_t rain_mm_x10;
@@ -41,16 +41,16 @@ typedef struct __attribute__((packed)) {
     uint8_t  crc8;
 } hist_rec_t;
 
-_Static_assert(sizeof(hist_rec_t) == 24, "hist_rec_t deve ter 24 bytes");
+_Static_assert(sizeof(hist_rec_t) == HISTORY_REC_SIZE, "hist_rec_t fora do formato de history.h");
 
 #define REC_PER_SECTOR  (SECTOR_SIZE / sizeof(hist_rec_t))   /* 170; sobram 16 bytes por setor */
 
 /* Acumulador do intervalo corrente */
 typedef struct {
     uint32_t start;            /* 0 = vazio */
-    uint16_t n_bme, n_lux, n_mq7, n_mq2, n_wind, n_rain, n_wet;
+    uint16_t n_thp, n_gas, n_lux, n_dust, n_wind, n_rain, n_wet;
     bool     gauge;
-    double   temp, hum, press, lux, mq7, mq2, wind;
+    double   temp, hum, press, gas, lux, dust, wind;
     float    gust_max;
     float    rain_mm;
 } acc_t;
@@ -74,9 +74,10 @@ static history_publish_fn_t s_publish;
 
 /* ---------- Utilitários ---------- */
 
+/* Semente = versão do formato: registros de formatos antigos na flash não validam */
 static uint8_t crc8(const uint8_t *d, size_t n)
 {
-    uint8_t c = 0;
+    uint8_t c = HISTORY_FMT_VERSION;
     while (n--) {
         c ^= *d++;
         for (int i = 0; i < 8; i++) {
@@ -122,56 +123,55 @@ static void acc_to_rec(const acc_t *a, hist_rec_t *r)
 {
     r->ts = a->start;
 
-    if (a->n_bme) {
-        double t = round(a->temp / a->n_bme * 100.0);
+    if (a->n_thp) {
+        double t = round(a->temp / a->n_thp * 100.0);
         r->temp_c100 = (int16_t)fmax(-32767.0, fmin(32767.0, t));
     } else {
         r->temp_c100 = NA_I16;
     }
-    r->hum_x10     = enc_u16(a->n_bme, a->hum,   10.0);
-    r->press_x10   = enc_u16(a->n_bme, a->press, 10.0);
-    r->lux         = enc_u16(a->n_lux, a->lux,   1.0);
-    r->mq7_mv      = enc_u16(a->n_mq7, a->mq7,   1000.0);
-    r->mq2_mv      = enc_u16(a->n_mq2, a->mq2,   1000.0);
-    r->wind_x10    = enc_u16(a->n_wind, a->wind, 10.0);
-    r->gust_x10    = a->n_wind ? enc_u16(1, a->gust_max, 10.0) : NA_U16;
-    r->rain_mm_x10 = a->gauge  ? enc_u16(1, a->rain_mm, 10.0)  : NA_U16;
-    r->rain_pct    = a->n_rain ? (uint8_t)lround(100.0 * a->n_wet / a->n_rain) : NA_U8;
-    r->crc8        = crc8((const uint8_t *)r, sizeof(*r) - 1);
+    r->hum_x10      = enc_u16(a->n_thp,  a->hum,   10.0);
+    r->press_x10    = enc_u16(a->n_thp,  a->press, 10.0);
+    r->gas_kohm_x10 = enc_u16(a->n_gas,  a->gas,   10.0);
+    r->lux_2        = enc_u16(a->n_lux,  a->lux,   0.5);
+    r->dust_ugm3    = enc_u16(a->n_dust, a->dust,  1.0);
+    r->wind_x10     = enc_u16(a->n_wind, a->wind,  10.0);
+    r->gust_x10     = a->n_wind ? enc_u16(1, a->gust_max, 10.0) : NA_U16;
+    r->rain_mm_x10  = a->gauge  ? enc_u16(1, a->rain_mm, 10.0)  : NA_U16;
+    r->rain_pct     = a->n_rain ? (uint8_t)lround(100.0 * a->n_wet / a->n_rain) : NA_U8;
+    r->crc8         = crc8((const uint8_t *)r, sizeof(*r) - 1);
 }
 
-static void acc_sample(acc_t *a, const lora_packet_t *pkt)
+static void acc_sample(acc_t *a, const lora_packet_t *p)
 {
-    if (lora_packet_has(pkt, LORA_VALID_BME280) && isfinite(pkt->temperature_c) &&
-        isfinite(pkt->humidity_pct) && isfinite(pkt->pressure_hpa)) {
-        a->n_bme++;
-        a->temp  += pkt->temperature_c;
-        a->hum   += pkt->humidity_pct;
-        a->press += pkt->pressure_hpa;
+    if (lora_packet_has(p, LORA_VALID_THP)) {
+        a->n_thp++;
+        a->temp  += p->temp_c100 / 100.0;
+        a->hum   += p->hum_x100 / 100.0;
+        a->press += p->press_x10 / 10.0;
     }
-    if (lora_packet_has(pkt, LORA_VALID_BH1750) && isfinite(pkt->lux)) {
+    if (lora_packet_has(p, LORA_VALID_GAS)) {
+        a->n_gas++;
+        a->gas += p->gas_ohm / 1000.0;
+    }
+    if (lora_packet_has(p, LORA_VALID_LUX)) {
         a->n_lux++;
-        a->lux += pkt->lux;
+        a->lux += p->lux_x10 / 10.0;
     }
-    if (lora_packet_has(pkt, LORA_VALID_MQ7) && isfinite(pkt->mq7_voltage)) {
-        a->n_mq7++;
-        a->mq7 += pkt->mq7_voltage;
+    if (lora_packet_has(p, LORA_VALID_DUST)) {
+        a->n_dust++;
+        a->dust += p->dust_ugm3;
     }
-    if (lora_packet_has(pkt, LORA_VALID_MQ2) && isfinite(pkt->mq2_voltage)) {
-        a->n_mq2++;
-        a->mq2 += pkt->mq2_voltage;
-    }
-    if (lora_packet_has(pkt, LORA_VALID_WIND) && isfinite(pkt->wind_avg_ms) && isfinite(pkt->wind_gust_ms)) {
+    if (lora_packet_has(p, LORA_VALID_WIND)) {
         a->n_wind++;
-        a->wind += pkt->wind_avg_ms;
-        a->gust_max = fmaxf(a->gust_max, pkt->wind_gust_ms);
+        a->wind    += p->wind_cms / 100.0;
+        a->gust_max = fmaxf(a->gust_max, p->gust_cms / 100.0f);
     }
-    if (lora_packet_has(pkt, LORA_VALID_RAIN)) {
+    if (lora_packet_has(p, LORA_VALID_RAIN)) {
         a->n_rain++;
-        a->n_wet += pkt->rain_status ? 1 : 0;
+        a->n_wet += (p->flags & LORA_FLAG_RAIN_WET) ? 1 : 0;
     }
-    if (lora_packet_has(pkt, LORA_VALID_GAUGE) && isfinite(pkt->rain_total_mm)) {
-        const float total = pkt->rain_total_mm;
+    if (lora_packet_has(p, LORA_VALID_GAUGE)) {
+        const float total = p->rain_x100 / 100.0f;
         if (isfinite(s_prev_mm)) {
             /* Acumulado é monotônico desde o boot do nó; se caiu, o nó reiniciou */
             a->rain_mm += (total >= s_prev_mm) ? (total - s_prev_mm) : total;

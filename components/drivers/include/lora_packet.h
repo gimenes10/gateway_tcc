@@ -1,137 +1,93 @@
 /**
  * @file lora_packet.h
- * @brief Formato do pacote de dados da estação meteorológica para transmissão LoRa.
+ * @brief Pacote LoRa da estação meteorológica (v4, 37 bytes).
  *
- * Pacote binário compacto (v3, 53 bytes) com os dados dos sensores.
- * Compartilhado entre nó sensor (TX) e nó gateway (RX) — manter os dois
+ * Compartilhado entre o nó sensor (TX) e o gateway (RX): manter os dois
  * arquivos idênticos.
  *
- * Cada sensor tem um bit em `valid`. Campo com bit em 0 = sem leitura
- * (sensor ausente ou falhou); o valor do campo deve ser ignorado e o
- * gateway publica `null` no JSON.
+ * Grandezas em inteiros escalados (sem float no ar). Cada grupo tem um bit
+ * em `valid`; bit em 0 = sem leitura, o campo deve ser ignorado e o gateway
+ * publica null no JSON.
  */
 #pragma once
 
 #include <stdint.h>
 #include <stdbool.h>
-#include <string.h>
+#include <stddef.h>
 
-/* Magic bytes + versão para validar integridade e compatibilidade */
-#define LORA_PKT_MAGIC_0   0xCA
-#define LORA_PKT_MAGIC_1   0xFE
-#define LORA_PKT_VERSION   3
+#define LORA_PKT_MAGIC_0    0xCA
+#define LORA_PKT_MAGIC_1    0xFE
+#define LORA_PKT_VERSION    4
 
-/* Bits de validade por sensor (campo `valid`) */
-#define LORA_VALID_BME280  (1U << 0)   /* temperatura, umidade, pressão */
-#define LORA_VALID_BH1750  (1U << 1)   /* lux */
-#define LORA_VALID_MQ7     (1U << 2)   /* mq7_raw, mq7_voltage */
-#define LORA_VALID_MQ2     (1U << 3)   /* mq2_raw, mq2_voltage */
-#define LORA_VALID_RAIN    (1U << 4)   /* rain_raw, rain_voltage, rain_status */
-#define LORA_VALID_WIND    (1U << 5)   /* wind_avg_ms, wind_gust_ms — anemômetro */
-#define LORA_VALID_GAUGE   (1U << 6)   /* rain_total_mm — pluviômetro basculante */
+/* Bits de `valid` */
+#define LORA_VALID_THP      (1U << 0)   /* BME680: temp_c100, hum_x100, press_x10 */
+#define LORA_VALID_GAS      (1U << 1)   /* BME680: gas_ohm */
+#define LORA_VALID_LUX      (1U << 2)   /* BH1750: lux_x10 */
+#define LORA_VALID_DUST     (1U << 3)   /* GP2Y1014: dust_ugm3, dust_vo_mv */
+#define LORA_VALID_RAIN     (1U << 4)   /* FC-22: rain_mv, LORA_FLAG_RAIN_WET */
+#define LORA_VALID_WIND     (1U << 5)   /* Anemômetro: wind_cms, gust_cms */
+#define LORA_VALID_GAUGE    (1U << 6)   /* Pluviômetro: rain_x100 */
 
-/**
- * @brief Estrutura do pacote da estação meteorológica (v3).
- *
- * Layout binário (little-endian, packed):
- *   [2B magic][1B version][1B valid]
- *   [4B temp][4B umid][4B press][4B lux]
- *   [2B mq7_raw][4B mq7_v][2B mq2_raw][4B mq2_v]
- *   [2B rain_raw][4B rain_v][1B rain_status]
- *   [4B wind_avg_ms][4B wind_gust_ms]
- *   [4B rain_total_mm]
- *   [2B crc16]
- *   Total: 53 bytes
- */
+/* Bits de `flags` */
+#define LORA_FLAG_RAIN_WET  (1U << 0)   /* FC-22 abaixo do limiar */
+
 typedef struct __attribute__((packed)) {
-    /* Header */
     uint8_t  magic[2];
     uint8_t  version;
-    uint8_t  valid;         /* Bitmask LORA_VALID_* */
+    uint8_t  flags;
+    uint8_t  valid;
+    uint16_t seq;           /* Sequência desde o boot (perda de pacotes, reboot) */
 
-    /* BME280 */
-    float    temperature_c;
-    float    humidity_pct;
-    float    pressure_hpa;
+    int16_t  temp_c100;     /* °C ×100 */
+    uint16_t hum_x100;      /* % ×100 */
+    uint16_t press_x10;     /* hPa ×10, pressão na estação */
+    uint32_t gas_ohm;       /* Resistência do gás, Ω (maior = ar mais limpo) */
+    uint32_t lux_x10;       /* lux ×10 */
+    uint16_t dust_ugm3;     /* Densidade de poeira/fumaça, µg/m³ */
+    uint16_t dust_vo_mv;    /* Vo do GP2Y, mV (para calibração) */
+    uint16_t rain_mv;       /* AO do FC-22, mV */
+    uint16_t wind_cms;      /* Vento médio no intervalo, cm/s */
+    uint16_t gust_cms;      /* Rajada (maior média de 3 s), cm/s */
+    uint32_t rain_x100;     /* Acumulado do pluviômetro, mm ×100 (cai = reboot) */
 
-    /* BH1750 */
-    float    lux;
-
-    /* MQ-7 */
-    int16_t  mq7_raw;
-    float    mq7_voltage;
-
-    /* MQ-2 */
-    int16_t  mq2_raw;
-    float    mq2_voltage;
-
-    /* Chuva FC-22 */
-    int16_t  rain_raw;
-    float    rain_voltage;
-    uint8_t  rain_status;   /* 1 = chovendo, 0 = seco */
-
-    /* Anemômetro */
-    float    wind_avg_ms;   /* Média no intervalo entre pacotes */
-    float    wind_gust_ms;  /* Rajada (máx. média de 3 s) no mesmo intervalo */
-
-    /* Pluviômetro basculante */
-    float    rain_total_mm; /* Acumulado desde o boot do nó (monotônico; cai = reboot) */
-
-    /* Integridade */
-    uint16_t crc16;
+    uint16_t crc16;         /* CRC-16/CCITT dos bytes anteriores */
 } lora_packet_t;
 
-_Static_assert(sizeof(lora_packet_t) == 53, "lora_packet_t v3 deve ter 53 bytes");
+_Static_assert(sizeof(lora_packet_t) == 37, "lora_packet_t v4 deve ter 37 bytes");
 
-/* Tamanho do payload sem CRC (para cálculo do CRC) */
 #define LORA_PKT_CRC_OFFSET  (sizeof(lora_packet_t) - sizeof(uint16_t))
 
-/**
- * @brief Calcula CRC-16/CCITT do payload.
- */
 static inline uint16_t lora_packet_crc16(const uint8_t *data, size_t len)
 {
     uint16_t crc = 0xFFFF;
+
     for (size_t i = 0; i < len; i++) {
         crc ^= (uint16_t)data[i] << 8;
         for (int j = 0; j < 8; j++) {
-            crc = (crc & 0x8000) ? (crc << 1) ^ 0x1021 : crc << 1;
+            crc = (crc & 0x8000) ? (uint16_t)((crc << 1) ^ 0x1021) : (uint16_t)(crc << 1);
         }
     }
     return crc;
 }
 
-/**
- * @brief Preenche o header e calcula o CRC de um pacote.
- *        O campo `valid` deve ser preenchido antes.
- */
+/** @brief Preenche magic, versão e CRC. `valid` e os campos vêm antes. */
 static inline void lora_packet_finalize(lora_packet_t *pkt)
 {
     pkt->magic[0] = LORA_PKT_MAGIC_0;
     pkt->magic[1] = LORA_PKT_MAGIC_1;
     pkt->version  = LORA_PKT_VERSION;
-    pkt->crc16 = lora_packet_crc16((const uint8_t *)pkt, LORA_PKT_CRC_OFFSET);
+    pkt->crc16    = lora_packet_crc16((const uint8_t *)pkt, LORA_PKT_CRC_OFFSET);
 }
 
-/**
- * @brief Valida magic, versão e CRC de um pacote recebido.
- * @return true se válido
- */
+/** @brief Valida magic, versão e CRC. */
 static inline bool lora_packet_validate(const lora_packet_t *pkt)
 {
-    if (pkt->magic[0] != LORA_PKT_MAGIC_0 || pkt->magic[1] != LORA_PKT_MAGIC_1) {
-        return false;
-    }
-    if (pkt->version != LORA_PKT_VERSION) {
-        return false;
-    }
-    uint16_t expected = lora_packet_crc16((const uint8_t *)pkt, LORA_PKT_CRC_OFFSET);
-    return (pkt->crc16 == expected);
+    return pkt->magic[0] == LORA_PKT_MAGIC_0 &&
+           pkt->magic[1] == LORA_PKT_MAGIC_1 &&
+           pkt->version  == LORA_PKT_VERSION &&
+           pkt->crc16    == lora_packet_crc16((const uint8_t *)pkt, LORA_PKT_CRC_OFFSET);
 }
 
-/**
- * @brief Retorna true se o sensor indicado pelo bit tem leitura válida.
- */
 static inline bool lora_packet_has(const lora_packet_t *pkt, uint8_t bit)
 {
     return (pkt->valid & bit) != 0;

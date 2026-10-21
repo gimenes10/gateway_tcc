@@ -7,24 +7,25 @@
  *   [0]   'H'
  *   [1]   'S'
  *   [2]   versão do formato (HISTORY_FMT_VERSION)
- *   [3]   tamanho do registro em bytes (24)
+ *   [3]   tamanho do registro em bytes (HISTORY_REC_SIZE)
  *   [4:5] período de agregação em segundos (uint16)
  *   [6:7] quantidade de registros N (uint16)
  *   [8..] N registros, do mais antigo para o mais novo
  *
- * Registro (24 bytes):
- *   uint32 ts           início do intervalo, Unix UTC (s)
- *   int16  temp_c100    °C ×100            (INT16_MIN = sem dado)
- *   uint16 hum_x10      % ×10              (0xFFFF   = sem dado)
- *   uint16 press_x10    hPa ×10
- *   uint16 lux          lux (satura em 65534)
- *   uint16 mq7_mv       tensão MQ-7 em mV
- *   uint16 mq2_mv       tensão MQ-2 em mV
- *   uint16 wind_x10     vento médio, m/s ×10
- *   uint16 gust_x10     maior rajada, m/s ×10
- *   uint16 rain_mm_x10  chuva do pluviômetro no intervalo, mm ×10
- *   uint8  rain_pct     % das amostras com chuva no FC-22 (0xFF = sem dado)
- *   uint8  crc8         CRC-8 (poli 0x07) dos 23 bytes anteriores
+ * Registro v2 (24 bytes). Médias do intervalo, exceto onde indicado;
+ * 0xFFFF (INT16_MIN nos campos com sinal) = sem dado.
+ *   uint32 ts            início do intervalo, Unix UTC (s)
+ *   int16  temp_c100     °C ×100
+ *   uint16 hum_x10       % ×10
+ *   uint16 press_x10     hPa ×10
+ *   uint16 lux_2         lux ÷ 2 (satura em 131068 lux)
+ *   uint16 gas_kohm_x10  resistência do gás do BME680, kΩ ×10
+ *   uint16 dust_ugm3     poeira/fumaça do GP2Y, µg/m³
+ *   uint16 wind_x10      vento médio, m/s ×10
+ *   uint16 gust_x10      maior rajada do intervalo, m/s ×10
+ *   uint16 rain_mm_x10   chuva do pluviômetro no intervalo (soma), mm ×10
+ *   uint8  rain_pct      % das amostras com chuva no FC-22 (0xFF = sem dado)
+ *   uint8  crc8          CRC-8 (poli 0x07, semente = versão) dos 23 bytes anteriores
  */
 #pragma once
 
@@ -33,7 +34,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define HISTORY_FMT_VERSION   1
+#define HISTORY_FMT_VERSION   2
+#define HISTORY_REC_SIZE      24
 #define HISTORY_PERIOD_S      300
 #define HISTORY_DAYS          7
 #define HISTORY_MAX_RECORDS   (HISTORY_DAYS * 86400 / HISTORY_PERIOD_S)   /* 2016 */

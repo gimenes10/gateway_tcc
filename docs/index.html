@@ -364,12 +364,12 @@ dialog .plot{height:210px;flex:none;margin-top:26px}
 
   <section class="tile c-air c6 enter" style="--i:7" aria-label="Qualidade do ar">
     <span class="th"><i class="ph-light ph-factory"></i>Qualidade do ar</span>
-    <button class="gas na-g" data-k="co" id="gas-co">
-      <span class="gas-hd"><span>Monóxido de carbono</span><b id="v-co">--</b></span>
+    <button class="gas na-g" data-k="dust" id="air-dust">
+      <span class="gas-hd"><span>Poeira e fumaça</span><b id="v-dust">--</b></span>
       <span class="scale"><span class="mk"></span></span>
     </button>
-    <button class="gas na-g" data-k="g" id="gas-g">
-      <span class="gas-hd"><span>Gases combustíveis</span><b id="v-g">--</b></span>
+    <button class="gas na-g" data-k="gas" id="air-gas">
+      <span class="gas-hd"><span>Gases (VOC)</span><b id="v-gas">--</b></span>
       <span class="scale"><span class="mk"></span></span>
     </button>
     <span class="foot">Sensores sem calibração: nível relativo.</span>
@@ -427,7 +427,7 @@ const MH = '9d10239851aa4a5fa45c7a5e8b7bdebd.s1.eu.hivemq.cloud', MP = 8884,
 const LAT = -23.16, LON = -45.79, TZ_MS = -3 * 36e5;
 
 /* Ordem das colunas no histórico: [ts, ...K] */
-const K = ['t', 'h', 'p', 'l', 'w', 'co', 'g', 'r'];
+const K = ['t', 'h', 'p', 'l', 'w', 'dust', 'gas', 'r'];
 const M = {
   t:  { f: 'temperatura', name: 'Temperatura',         u: '°C',   d: 1, ic: 'thermometer-simple' },
   h:  { f: 'umidade',     name: 'Umidade',             u: '%',    d: 0, ic: 'drop',
@@ -438,14 +438,14 @@ const M = {
         note: () => skyNote() },
   w:  { f: 'vento_ms',    name: 'Vento',               u: 'km/h', d: 0, ic: 'wind', x: 3.6,
         note: 'Velocidade medida pelo anemômetro de conchas.' },
-  co: { f: 'mq7_voltage', name: 'Monóxido de carbono', u: 'V',    d: 2, ic: 'factory',
-        note: 'MQ-7 sem calibração: o valor é a tensão de saída do sensor.' },
-  g:  { f: 'mq2_voltage', name: 'Gases combustíveis',  u: 'V',    d: 2, ic: 'factory',
-        note: 'MQ-2 sem calibração: o valor é a tensão de saída do sensor.' },
+  dust: { f: 'poeira_ugm3', name: 'Poeira e fumaça',   u: 'µg/m³', d: 0, ic: 'factory',
+        note: 'GP2Y1014 óptico, sem calibração gravimétrica: sensibilidade típica do datasheet sobre uma linha de base automática. Indica fumaça e poeira, não PM2.5.' },
+  gas:  { f: 'gas_kohm',    name: 'Gases (VOC)',       u: 'kΩ',    d: 0, ic: 'flask',
+        note: 'Resistência do sensor de gás do BME680. Quanto maior, mais limpo o ar; compare com o próprio histórico.' },
   r:  { f: 'chuva_status', d: 0 },
 };
 const COL = k => K.indexOf(k) + 1;
-const DAY = 864e5, STORE = 'estacao-sjc:hist:v2', MAX_ROWS = 4000, PLOT_N = 320;
+const DAY = 864e5, STORE = 'estacao-sjc:hist:v3', MAX_ROWS = 4000, PLOT_N = 320;
 
 const $ = id => document.getElementById(id);
 const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -516,8 +516,8 @@ function sunToday(now) {
   }
   return (sunDay = { start, pts, rise, set });
 }
-/* Iluminância horizontal esperada com céu limpo; limitada à saturação do BH1750 */
-const clearLux = el => el <= 0 ? 0 : Math.min(50000, 128000 * Math.sin(el * Math.PI / 180) * Math.exp(-0.21 / Math.sin(el * Math.PI / 180)));
+/* Iluminância horizontal esperada com céu limpo; limitada à saturação do BH1750 (MTreg 31) */
+const clearLux = el => el <= 0 ? 0 : Math.min(120000, 128000 * Math.sin(el * Math.PI / 180) * Math.exp(-0.21 / Math.sin(el * Math.PI / 180)));
 
 /* ---------- condição e céu ---------- */
 const SKY = {
@@ -744,13 +744,19 @@ function pressure(v) {
   ic.className = 'ph-light ' + (s > 0 ? 'ph-arrow-up' : s < 0 ? 'ph-arrow-down' : 'ph-minus');
   $('f-p').textContent = s === 0 ? `Estável em ${tr.h} h` : `${s > 0 ? '+' : ''}${fmt(tr.dv, 1)} hPa em ${tr.h} h`;
 }
-function gas(k, v) {
-  const box = $('gas-' + k), el = $('v-' + k);
+/* Posição na escala (0 = ar limpo): poeira na faixa útil do GP2Y (~0,5 mg/m³);
+   VOC relativo à maior resistência das últimas 24 h, que serve de linha de base */
+function airPos(k, v) {
+  if (k === 'dust') return clamp(v / 500, 0, 1);
+  const s = stats('gas');
+  return s && s.mx > 0 ? clamp(1 - v / s.mx, 0, 1) : 0;
+}
+function air(k, v) {
+  const box = $('air-' + k), el = $('v-' + k), m = M[k];
   box.classList.toggle('na-g', !has(v));
   if (!has(v)) { el.textContent = '--'; return; }
-  const t = v > 2.2 ? 'Alto' : v > 1.4 ? 'Elevado' : 'Normal';   /* limiares herdados do firmware */
-  el.innerHTML = `${t}<small>${fmt(v, 2)} V</small>`;
-  box.querySelector('.mk').style.setProperty('--p', (clamp(v / 3.3, 0, 1) * 100).toFixed(1) + '%');
+  el.innerHTML = `${fmt(v, m.d)}<small>${m.u}</small>`;
+  box.querySelector('.mk').style.setProperty('--p', (airPos(k, v) * 100).toFixed(1) + '%');
 }
 function rain(v) {
   const tile = $('rain-tile'), raining = v === 1, c = COL('r');
@@ -831,7 +837,7 @@ function applyRow(r, d) {
   $('bento').classList.toggle('no-wind', !windSeen);
   setNum($('v-w'), v('w'), 0);
   $('f-w').textContent = has(v('w')) ? beaufort(v('w')) : '';
-  gas('co', v('co')); gas('g', v('g'));
+  air('dust', v('dust')); air('gas', v('gas'));
   rain(v('r'));
   hero(d, Date.now());
   sunArc(Date.now());
@@ -931,7 +937,7 @@ document.addEventListener('estacao:hist-rows', e => {
   };
   for (const s of rows) {
     if (s.ts + step < lim || covered(s.ts, s.ts + step)) continue;
-    add.push([s.ts + step / 2, s.t, s.h, s.p, s.l, s.w, s.co, s.g, has(s.rp) ? (s.rp > 0 ? 1 : 0) : null]);
+    add.push([s.ts + step / 2, s.t, s.h, s.p, s.l, s.w, s.dust, s.gas, has(s.rp) ? (s.rp > 0 ? 1 : 0) : null]);
   }
   if (!add.length) return;
   hist = hist.concat(add).sort((a, b) => a[0] - b[0]);
@@ -978,8 +984,9 @@ const dayStart = k => k * DAY - TZ_MS;
 const dur = min => min < 60 ? `${Math.round(min)} min` : `${Math.floor(min / 60)} h${Math.round(min % 60) ? ' ' + Math.round(min % 60) : ''}`;
 
 /* ---------- decodificação (formato em components/history/include/history.h) ---------- */
-function crc8(u8, o, n) {
-  let c = 0;
+const FMT = 2;   /* HISTORY_FMT_VERSION: também é a semente do CRC-8 */
+function crc8(u8, o, n, seed) {
+  let c = seed;
   for (let i = 0; i < n; i++) {
     c ^= u8[o + i];
     for (let b = 0; b < 8; b++) c = c & 0x80 ? ((c << 1) ^ 0x07) & 0xff : (c << 1) & 0xff;
@@ -988,21 +995,20 @@ function crc8(u8, o, n) {
 }
 function decode(msg) {
   const u8 = msg instanceof Uint8Array ? msg : new Uint8Array(msg);
-  if (u8.byteLength < 8 || u8[0] !== 0x48 || u8[1] !== 0x53 || u8[2] !== 1) return null;
+  if (u8.byteLength < 8 || u8[0] !== 0x48 || u8[1] !== 0x53 || u8[2] !== FMT) return null;
   const dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
   const rs = u8[3], period = dv.getUint16(4, true), n = dv.getUint16(6, true);
   if (rs < 24 || 8 + n * rs > u8.byteLength) return null;
   const u16 = (o, s) => { const v = dv.getUint16(o, true); return v === 0xffff ? null : v / s; };
+  const i16 = (o, s) => { const v = dv.getInt16(o, true); return v === -32768 ? null : v / s; };
   const rows = [];
   for (let i = 0; i < n; i++) {
-    const o = 8 + i * rs;
-    if (crc8(u8, o, 23) !== u8[o + 23] || dv.getUint32(o, true) < 1700000000) continue;
-    const t = dv.getInt16(o + 4, true), rp = u8[o + 22];
+    const o = 8 + i * rs, rp = u8[o + 22];
+    if (crc8(u8, o, 23, FMT) !== u8[o + 23] || dv.getUint32(o, true) < 1700000000) continue;
     rows.push({
       ts: dv.getUint32(o, true) * 1000,
-      t: t === -32768 ? null : t / 100,
-      h: u16(o + 6, 10), p: u16(o + 8, 10), l: u16(o + 10, 1),
-      co: u16(o + 12, 1000), g: u16(o + 14, 1000),
+      t: i16(o + 4, 100), h: u16(o + 6, 10), p: u16(o + 8, 10), l: u16(o + 10, .5),
+      gas: u16(o + 12, 10), dust: u16(o + 14, 1),
       w: u16(o + 16, 10 / 3.6), gu: u16(o + 18, 10 / 3.6),     /* m/s ×10 -> km/h */
       mm: u16(o + 20, 10), rp: rp === 0xff ? null : rp,
     });
@@ -1018,8 +1024,8 @@ const M = {
   l:  { chip: 'Luz',         name: 'Luminosidade',        ic: 'sun',                u: 'lux',  d: 0 },
   r:  { chip: 'Chuva',       name: 'Chuva por hora',      ic: 'cloud-rain',         bars: true },
   w:  { chip: 'Vento',       name: 'Vento',               ic: 'wind',               u: 'km/h', d: 0 },
-  co: { chip: 'CO',          name: 'Monóxido de carbono', ic: 'factory',            u: 'V',    d: 2 },
-  g:  { chip: 'Gases',       name: 'Gases combustíveis',  ic: 'factory',            u: 'V',    d: 2 },
+  dust: { chip: 'Poeira',    name: 'Poeira e fumaça',     ic: 'factory',            u: 'µg/m³', d: 0 },
+  gas:  { chip: 'VOC',       name: 'Gases (VOC)',         ic: 'flask',              u: 'kΩ',   d: 0 },
 };
 const TCOL = [[5, '#7ab8ff'], [14, '#62d3e8'], [21, '#9be37a'], [26, '#ffd25a'], [31, '#ff9a4a'], [37, '#ff5a4a']];
 function tcolor(t) {

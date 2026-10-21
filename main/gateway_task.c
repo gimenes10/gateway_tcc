@@ -126,80 +126,76 @@ static const char *fmt_val(char *buf, size_t size, bool ok, const char *f, doubl
 
 /* ---------- Log serial ---------- */
 
-static void log_packet(const lora_packet_t *pkt, int8_t rssi, int8_t snr)
+static void log_packet(const lora_packet_t *p, int8_t rssi, int8_t snr)
 {
-    const bool bme  = lora_packet_has(pkt, LORA_VALID_BME280);
-    const bool bh   = lora_packet_has(pkt, LORA_VALID_BH1750);
-    const bool mq7  = lora_packet_has(pkt, LORA_VALID_MQ7);
-    const bool mq2  = lora_packet_has(pkt, LORA_VALID_MQ2);
-    const bool rain = lora_packet_has(pkt, LORA_VALID_RAIN);
-    const bool wind = lora_packet_has(pkt, LORA_VALID_WIND);
-    const bool gauge = lora_packet_has(pkt, LORA_VALID_GAUGE);
-    char a[16], b[16], c[16];
+    const bool thp  = lora_packet_has(p, LORA_VALID_THP);
+    const bool gas  = lora_packet_has(p, LORA_VALID_GAS);
+    const bool lux  = lora_packet_has(p, LORA_VALID_LUX);
+    const bool dust = lora_packet_has(p, LORA_VALID_DUST);
+    const bool rain = lora_packet_has(p, LORA_VALID_RAIN);
+    const bool wind = lora_packet_has(p, LORA_VALID_WIND);
+    const bool gaug = lora_packet_has(p, LORA_VALID_GAUGE);
+    char a[16], b[16], c[16], d[16];
 
-    ESP_LOGI(TAG, "=== Pacote #%lu (RSSI=%d dBm, SNR=%d dB, valid=0x%02X) ===",
-             (unsigned long)pkt_count, rssi, snr, pkt->valid);
-    ESP_LOGI(TAG, "BME280  | Temp=%s C | Umid=%s %% | Press=%s hPa",
-             fmt_val(a, sizeof(a), bme, "%.2f", pkt->temperature_c),
-             fmt_val(b, sizeof(b), bme, "%.1f", pkt->humidity_pct),
-             fmt_val(c, sizeof(c), bme, "%.2f", pkt->pressure_hpa));
-    ESP_LOGI(TAG, "BH1750  | Lux=%s",
-             fmt_val(a, sizeof(a), bh, "%.1f", pkt->lux));
-    ESP_LOGI(TAG, "MQ-7    | Raw=%s | Voltage=%s V",
-             fmt_val(a, sizeof(a), mq7, "%.0f", pkt->mq7_raw),
-             fmt_val(b, sizeof(b), mq7, "%.2f", pkt->mq7_voltage));
-    ESP_LOGI(TAG, "MQ-2    | Raw=%s | Voltage=%s V",
-             fmt_val(a, sizeof(a), mq2, "%.0f", pkt->mq2_raw),
-             fmt_val(b, sizeof(b), mq2, "%.2f", pkt->mq2_voltage));
-    ESP_LOGI(TAG, "Chuva   | Raw=%s | Voltage=%s V | %s",
-             fmt_val(a, sizeof(a), rain, "%.0f", pkt->rain_raw),
-             fmt_val(b, sizeof(b), rain, "%.2f", pkt->rain_voltage),
-             rain ? (pkt->rain_status ? "CHOVENDO" : "SECO") : "--");
-    ESP_LOGI(TAG, "Vento   | Media=%s m/s | Rajada=%s m/s",
-             fmt_val(a, sizeof(a), wind, "%.1f", pkt->wind_avg_ms),
-             fmt_val(b, sizeof(b), wind, "%.1f", pkt->wind_gust_ms));
-    ESP_LOGI(TAG, "Pluvio  | Acumulado=%s mm",
-             fmt_val(a, sizeof(a), gauge, "%.2f", pkt->rain_total_mm));
+    ESP_LOGI(TAG, "=== Pacote #%lu seq=%u (RSSI=%d dBm, SNR=%d dB, valid=0x%02X) ===",
+             (unsigned long)pkt_count, p->seq, rssi, snr, p->valid);
+    ESP_LOGI(TAG, "BME680  | T=%s C | UR=%s %% | P=%s hPa | gas=%s kOhm",
+             fmt_val(a, sizeof(a), thp, "%.2f", p->temp_c100 / 100.0),
+             fmt_val(b, sizeof(b), thp, "%.1f", p->hum_x100 / 100.0),
+             fmt_val(c, sizeof(c), thp, "%.1f", p->press_x10 / 10.0),
+             fmt_val(d, sizeof(d), gas, "%.1f", p->gas_ohm / 1000.0));
+    ESP_LOGI(TAG, "BH1750  | %s lux | GP2Y %s ug/m3 (Vo %s mV)",
+             fmt_val(a, sizeof(a), lux, "%.0f", p->lux_x10 / 10.0),
+             fmt_val(b, sizeof(b), dust, "%.0f", p->dust_ugm3),
+             fmt_val(c, sizeof(c), dust, "%.0f", p->dust_vo_mv));
+    ESP_LOGI(TAG, "Chuva   | FC-22 %s mV %s | pluvio %s mm",
+             fmt_val(a, sizeof(a), rain, "%.0f", p->rain_mv),
+             rain ? ((p->flags & LORA_FLAG_RAIN_WET) ? "MOLHADO" : "SECO") : "--",
+             fmt_val(b, sizeof(b), gaug, "%.2f", p->rain_x100 / 100.0));
+    ESP_LOGI(TAG, "Vento   | media %s m/s | rajada %s m/s",
+             fmt_val(a, sizeof(a), wind, "%.2f", p->wind_cms / 100.0),
+             fmt_val(b, sizeof(b), wind, "%.2f", p->gust_cms / 100.0));
 }
 
 /* ---------- OLED ---------- */
 
-static void update_oled(const lora_packet_t *pkt, int8_t rssi, int8_t snr, bool mqtt_ok)
+static void update_oled(const lora_packet_t *p, int8_t rssi, int8_t snr, bool mqtt_ok)
 {
     if (!oled_available) { return; }
 
-    const bool bme  = lora_packet_has(pkt, LORA_VALID_BME280);
-    const bool bh   = lora_packet_has(pkt, LORA_VALID_BH1750);
-    const bool mq7  = lora_packet_has(pkt, LORA_VALID_MQ7);
-    const bool mq2  = lora_packet_has(pkt, LORA_VALID_MQ2);
-    const bool rain = lora_packet_has(pkt, LORA_VALID_RAIN);
-    const bool wind = lora_packet_has(pkt, LORA_VALID_WIND);
+    const bool thp  = lora_packet_has(p, LORA_VALID_THP);
+    const bool lux  = lora_packet_has(p, LORA_VALID_LUX);
+    const bool dust = lora_packet_has(p, LORA_VALID_DUST);
+    const bool gas  = lora_packet_has(p, LORA_VALID_GAS);
+    const bool rain = lora_packet_has(p, LORA_VALID_RAIN);
+    const bool wind = lora_packet_has(p, LORA_VALID_WIND);
     char line[22];
     char a[10], b[10];
 
     oled_clear(&oled);
 
     snprintf(line, sizeof(line), "T:%sC  H:%s%%",
-             fmt_val(a, sizeof(a), bme, "%.1f", pkt->temperature_c),
-             fmt_val(b, sizeof(b), bme, "%.0f", pkt->humidity_pct));
+             fmt_val(a, sizeof(a), thp, "%.1f", p->temp_c100 / 100.0),
+             fmt_val(b, sizeof(b), thp, "%.0f", p->hum_x100 / 100.0));
     oled_draw_text(&oled, 0, 0, line);
 
     snprintf(line, sizeof(line), "P:%s hPa",
-             fmt_val(a, sizeof(a), bme, "%.1f", pkt->pressure_hpa));
+             fmt_val(a, sizeof(a), thp, "%.1f", p->press_x10 / 10.0));
     oled_draw_text(&oled, 0, 1, line);
 
     snprintf(line, sizeof(line), "Lux:%s  %s",
-             fmt_val(a, sizeof(a), bh, "%.0f", pkt->lux),
-             rain ? (pkt->rain_status ? "CHUVA" : "SECO") : "--");
+             fmt_val(a, sizeof(a), lux, "%.0f", p->lux_x10 / 10.0),
+             rain ? ((p->flags & LORA_FLAG_RAIN_WET) ? "CHUVA" : "SECO") : "--");
     oled_draw_text(&oled, 0, 2, line);
 
-    snprintf(line, sizeof(line), "CO:%s GLP:%s",
-             fmt_val(a, sizeof(a), mq7, "%.0f", pkt->mq7_raw),
-             fmt_val(b, sizeof(b), mq2, "%.0f", pkt->mq2_raw));
+    snprintf(line, sizeof(line), "Po:%s VOC:%sk",
+             fmt_val(a, sizeof(a), dust, "%.0f", p->dust_ugm3),
+             fmt_val(b, sizeof(b), gas, "%.0f", p->gas_ohm / 1000.0));
     oled_draw_text(&oled, 0, 3, line);
 
-    snprintf(line, sizeof(line), "Vento:%s m/s",
-             fmt_val(a, sizeof(a), wind, "%.1f", pkt->wind_avg_ms));
+    snprintf(line, sizeof(line), "Vento:%s Raj:%s",
+             fmt_val(a, sizeof(a), wind, "%.1f", p->wind_cms / 100.0),
+             fmt_val(b, sizeof(b), wind, "%.1f", p->gust_cms / 100.0));
     oled_draw_text(&oled, 0, 4, line);
 
     snprintf(line, sizeof(line), "LoRa:%ddBm SNR:%d", rssi, snr);
@@ -210,7 +206,7 @@ static void update_oled(const lora_packet_t *pkt, int8_t rssi, int8_t snr, bool 
              wifi_manager_is_connected() ? "OK" : "OFF");
     oled_draw_text(&oled, 0, 6, line);
 
-    snprintf(line, sizeof(line), "Pkts:%lu | GW v2.0",
+    snprintf(line, sizeof(line), "Pkts:%lu | GW v4",
              (unsigned long)pkt_count);
     oled_draw_text(&oled, 0, 7, line);
 

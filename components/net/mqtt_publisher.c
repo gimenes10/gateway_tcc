@@ -122,7 +122,7 @@ static void json_num(json_buf_t *j, const char *key, bool ok, double v, int dec)
     j->len += (size_t)n;
 }
 
-esp_err_t mqtt_publish_data(const lora_packet_t *pkt, int8_t rssi, int8_t snr)
+esp_err_t mqtt_publish_data(const lora_packet_t *p, int8_t rssi, int8_t snr)
 {
     if (!s_connected || s_client == NULL) {
         return ESP_ERR_INVALID_STATE;
@@ -132,30 +132,29 @@ esp_err_t mqtt_publish_data(const lora_packet_t *pkt, int8_t rssi, int8_t snr)
     json_buf_t j = { .buf = json, .size = sizeof(json), .len = 1 };
     json[0] = '{';
 
-    const bool bme  = lora_packet_has(pkt, LORA_VALID_BME280);
-    const bool bh   = lora_packet_has(pkt, LORA_VALID_BH1750);
-    const bool mq7  = lora_packet_has(pkt, LORA_VALID_MQ7);
-    const bool mq2  = lora_packet_has(pkt, LORA_VALID_MQ2);
-    const bool rain = lora_packet_has(pkt, LORA_VALID_RAIN);
-    const bool wind  = lora_packet_has(pkt, LORA_VALID_WIND);
-    const bool gauge = lora_packet_has(pkt, LORA_VALID_GAUGE);
+    const bool thp  = lora_packet_has(p, LORA_VALID_THP);
+    const bool gas  = lora_packet_has(p, LORA_VALID_GAS);
+    const bool lux  = lora_packet_has(p, LORA_VALID_LUX);
+    const bool dust = lora_packet_has(p, LORA_VALID_DUST);
+    const bool rain = lora_packet_has(p, LORA_VALID_RAIN);
+    const bool wind = lora_packet_has(p, LORA_VALID_WIND);
+    const bool gaug = lora_packet_has(p, LORA_VALID_GAUGE);
 
-    json_num(&j, "temperatura",   bme,  pkt->temperature_c, 2);
-    json_num(&j, "umidade",       bme,  pkt->humidity_pct,  1);
-    json_num(&j, "pressao",       bme,  pkt->pressure_hpa,  2);
-    json_num(&j, "lux",           bh,   pkt->lux,           1);
-    json_num(&j, "mq7_raw",       mq7,  pkt->mq7_raw,       0);
-    json_num(&j, "mq7_voltage",   mq7,  pkt->mq7_voltage,   2);
-    json_num(&j, "mq2_raw",       mq2,  pkt->mq2_raw,       0);
-    json_num(&j, "mq2_voltage",   mq2,  pkt->mq2_voltage,   2);
-    json_num(&j, "chuva_raw",     rain, pkt->rain_raw,      0);
-    json_num(&j, "chuva_voltage", rain, pkt->rain_voltage,  2);
-    json_num(&j, "chuva_status",  rain, pkt->rain_status,   0);
-    json_num(&j, "vento_ms",        wind,  pkt->wind_avg_ms,   1);
-    json_num(&j, "vento_rajada_ms", wind,  pkt->wind_gust_ms,  1);
-    json_num(&j, "chuva_acum_mm",   gauge, pkt->rain_total_mm, 2);
-    json_num(&j, "rssi",          true, rssi,               0);
-    json_num(&j, "snr",           true, snr,                0);
+    json_num(&j, "temperatura",     thp,  p->temp_c100 / 100.0,  2);
+    json_num(&j, "umidade",         thp,  p->hum_x100 / 100.0,   1);
+    json_num(&j, "pressao",         thp,  p->press_x10 / 10.0,   1);
+    json_num(&j, "gas_kohm",        gas,  p->gas_ohm / 1000.0,   1);
+    json_num(&j, "lux",             lux,  p->lux_x10 / 10.0,     1);
+    json_num(&j, "poeira_ugm3",     dust, p->dust_ugm3,          0);
+    json_num(&j, "poeira_vo_v",     dust, p->dust_vo_mv / 1000.0, 3);
+    json_num(&j, "chuva_v",         rain, p->rain_mv / 1000.0,   2);
+    json_num(&j, "chuva_status",    rain, (p->flags & LORA_FLAG_RAIN_WET) ? 1 : 0, 0);
+    json_num(&j, "vento_ms",        wind, p->wind_cms / 100.0,   1);
+    json_num(&j, "vento_rajada_ms", wind, p->gust_cms / 100.0,   1);
+    json_num(&j, "chuva_acum_mm",   gaug, p->rain_x100 / 100.0,  2);
+    json_num(&j, "seq",             true, p->seq,                0);
+    json_num(&j, "rssi",            true, rssi,                  0);
+    json_num(&j, "snr",             true, snr,                   0);
 
     if (j.overflow) {
         ESP_LOGE(TAG, "JSON excedeu o buffer (%zu bytes)", sizeof(json));
