@@ -751,11 +751,11 @@ function airPos(k, v) {
   const s = stats('gas');
   return s && s.mx > 0 ? clamp(1 - v / s.mx, 0, 1) : 0;
 }
-function air(k, v) {
+function air(k, v, sat) {
   const box = $('air-' + k), el = $('v-' + k), m = M[k];
   box.classList.toggle('na-g', !has(v));
   if (!has(v)) { el.textContent = '--'; return; }
-  el.innerHTML = `${fmt(v, m.d)}<small>${m.u}</small>`;
+  el.innerHTML = `${sat ? '&gt;&nbsp;' : ''}${fmt(v, m.d)}<small>${m.u}</small>`;
   box.querySelector('.mk').style.setProperty('--p', (airPos(k, v) * 100).toFixed(1) + '%');
 }
 function rain(v) {
@@ -837,7 +837,7 @@ function applyRow(r, d) {
   $('bento').classList.toggle('no-wind', !windSeen);
   setNum($('v-w'), v('w'), 0);
   $('f-w').textContent = has(v('w')) ? beaufort(v('w')) : '';
-  air('dust', v('dust')); air('gas', v('gas'));
+  air('dust', v('dust'), !!d && d.poeira_saturada === 1); air('gas', v('gas'));
   rain(v('r'));
   hero(d, Date.now());
   sunArc(Date.now());

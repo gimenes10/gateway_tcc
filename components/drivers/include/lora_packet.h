@@ -30,6 +30,7 @@
 
 /* Bits de `flags` */
 #define LORA_FLAG_RAIN_WET  (1U << 0)   /* FC-22 abaixo do limiar */
+#define LORA_FLAG_DUST_SAT  (1U << 1)   /* GP2Y saturado: dust_ugm3 = 500, valor real maior */
 
 typedef struct __attribute__((packed)) {
     uint8_t  magic[2];

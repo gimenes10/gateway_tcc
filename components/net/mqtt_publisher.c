@@ -146,6 +146,7 @@ esp_err_t mqtt_publish_data(const lora_packet_t *p, int8_t rssi, int8_t snr)
     json_num(&j, "gas_kohm",        gas,  p->gas_ohm / 1000.0,   1);
     json_num(&j, "lux",             lux,  p->lux_x10 / 10.0,     1);
     json_num(&j, "poeira_ugm3",     dust, p->dust_ugm3,          0);
+    json_num(&j, "poeira_saturada", dust, (p->flags & LORA_FLAG_DUST_SAT) ? 1 : 0, 0);
     json_num(&j, "poeira_vo_v",     dust, p->dust_vo_mv / 1000.0, 3);
     json_num(&j, "chuva_v",         rain, p->rain_mv / 1000.0,   2);
     json_num(&j, "chuva_status",    rain, (p->flags & LORA_FLAG_RAIN_WET) ? 1 : 0, 0);
