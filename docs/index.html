@@ -124,6 +124,10 @@ button.tile:active,.gas:active{transform:scale(.98)}
 @keyframes pulse{40%{box-shadow:0 0 0 9px rgba(255,255,255,0)}}
 .cross{position:absolute;top:0;bottom:0;left:0;width:1px;background:rgba(255,255,255,.4);opacity:0;pointer-events:none;transition:opacity .15s var(--out)}
 .cross.on{opacity:1}
+.brush{position:absolute;top:0;bottom:0;background:rgba(255,255,255,.1);box-shadow:inset 1px 0 0 rgba(255,255,255,.5),inset -1px 0 0 rgba(255,255,255,.5);pointer-events:none}
+.zreset{position:absolute;top:0;right:0;margin:0;z-index:2}
+.zoom-out{margin-left:10px;padding:3px 10px;border-radius:999px;font:inherit;font-size:12px;color:var(--tx2);background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);cursor:pointer}
+@media (hover:hover) and (pointer:fine){.zoom-out:hover{background:rgba(255,255,255,.12);color:#fff}}
 .cross .pt{left:0;box-shadow:none}
 .tip{position:absolute;top:-8px;left:10px;transform:translateY(-100%);padding:4px 9px;border-radius:9px;font-size:12.5px;white-space:nowrap;
   background:rgba(8,18,36,.75);box-shadow:inset 0 0 0 1px var(--ring)}
@@ -389,8 +393,8 @@ dialog .plot{height:210px;flex:none;margin-top:26px}
   </div>
   <div class="wk-grid">
     <section class="tile wk-chart" aria-label="Gráfico dos últimos 7 dias">
-      <div class="chart-hd"><span class="th" id="wk-th"><i class="ph-light ph-thermometer-simple"></i>Temperatura</span><span id="wk-range"></span></div>
-      <div class="plot" id="wk-plot"><p class="empty" id="wk-empty">Aguardando o histórico da estação.</p></div>
+      <div class="chart-hd"><span class="th" id="wk-th"><i class="ph-light ph-thermometer-simple"></i>Temperatura</span><span><span id="wk-range"></span><button class="zoom-out" id="wk-zoom" type="button" hidden>Ver 7 dias</button></span></div>
+      <div class="plot" id="wk-plot" title="Arraste sobre o gráfico para ampliar um trecho; duplo clique volta aos 7 dias"><p class="empty" id="wk-empty">Aguardando o histórico da estação.</p></div>
       <div class="axis wk-axis" id="wk-axis"></div>
     </section>
     <section class="tile wk-days" aria-label="Resumo por dia">
@@ -633,11 +637,14 @@ function makeChart(root, axis) {
        <linearGradient id="${id}f" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".16"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
      </defs><line class="base" x1="0" x2="${W}" y1="${H / 2}" y2="${H / 2}"/><path fill="url(#${id}f)"/><path class="line" stroke="url(#${id}s)"/></svg>
      <span class="pt" hidden></span><div class="cross"><span class="pt"></span><span class="tip"></span></div>
+     <div class="brush" hidden></div><button class="zoom-out zreset" type="button" hidden>Ver 24 h</button>
      <p class="empty">O gráfico aparece conforme as leituras chegam.</p>`;
+  root.title = 'Arraste sobre o gráfico para ampliar um trecho; duplo clique volta às 24 h';
   const [area, line] = root.querySelectorAll('path'), grad = root.querySelector(`#${id}s`),
         last = root.querySelector(':scope > .pt'), cross = root.querySelector('.cross'),
         cpt = cross.querySelector('.pt'), tip = cross.querySelector('.tip'), empty = root.querySelector('.empty');
-  let geo = [], key = 't';
+  let geo = [], key = 't', zoom = null, dom = null, drag = null;
+  const ZMIN = 6e5;   /* zoom mínimo: 10 min */
 
   root.addEventListener('pointermove', e => {
     if (!geo.length) return;
@@ -652,12 +659,61 @@ function makeChart(root, axis) {
   });
   root.addEventListener('pointerleave', () => cross.classList.remove('on'));
 
-  return {
+  /* ---------- zoom: arrastar seleciona o trecho, duplo clique ou o botão voltam às 24 h,
+     Ctrl + roda (ou pinça no trackpad) amplia em torno do cursor ---------- */
+  const brush = root.querySelector('.brush'), zbtn = root.querySelector('.zreset');
+  const cur = () => zoom || dom;
+  const setZ = (a, b) => {
+    if (!dom) return;
+    const full = dom[1] - dom[0], s = Math.min(full, Math.max(ZMIN, b - a));
+    a = Math.min(Math.max(a, dom[0]), dom[1] - s);
+    zoom = s >= full ? null : [a, a + s];
+    api.draw(key);
+  };
+  root.addEventListener('pointerdown', e => {
+    if (!geo.length || e.button > 0 || e.target.closest('.zreset')) return;
+    const r = root.getBoundingClientRect();
+    drag = { x0: e.clientX - r.left, x1: e.clientX - r.left, w: r.width };
+    root.setPointerCapture(e.pointerId);
+  });
+  root.addEventListener('pointermove', e => {
+    if (!drag) return;
+    const r = root.getBoundingClientRect();
+    drag.x1 = clamp(e.clientX - r.left, 0, r.width);
+    const a = Math.min(drag.x0, drag.x1), w = Math.abs(drag.x1 - drag.x0);
+    if (w > 4) { brush.style.left = a + 'px'; brush.style.width = w + 'px'; brush.hidden = false; }
+  });
+  const endDrag = ok => {
+    if (!drag) return;
+    const d = drag;
+    drag = null; brush.hidden = true;
+    if (!ok || Math.abs(d.x1 - d.x0) < 8 || !cur()) return;
+    const [a, b] = cur(), f0 = Math.min(d.x0, d.x1) / d.w, f1 = Math.max(d.x0, d.x1) / d.w;
+    setZ(a + f0 * (b - a), a + f1 * (b - a));
+  };
+  root.addEventListener('pointerup', () => endDrag(true));
+  root.addEventListener('pointercancel', () => endDrag(false));
+  root.addEventListener('dblclick', () => { if (zoom) { zoom = null; api.draw(key); } });
+  root.addEventListener('wheel', e => {
+    if (!e.ctrlKey || !geo.length || !cur()) return;
+    e.preventDefault();
+    const r = root.getBoundingClientRect(), f = (e.clientX - r.left) / r.width, [a, b] = cur();
+    const c = a + f * (b - a), s = (b - a) * Math.exp(e.deltaY * .01);
+    setZ(c - f * s, c - f * s + s);
+  }, { passive: false });
+  zbtn.addEventListener('click', () => { zoom = null; api.draw(key); });
+
+  const api = {
+    reset() { zoom = null; },
     draw(k) {
       key = k;
       let pts = series(k);
+      dom = pts.length > 1 ? [pts[0][0], pts[pts.length - 1][0]] : null;
+      if (zoom) pts = pts.filter(p => p[0] >= zoom[0] && p[0] <= zoom[1]);
+      zbtn.hidden = !zoom;
+      cross.classList.remove('on');   /* a posição antiga não vale para a nova escala */
       const none = pts.length < 2;
-      empty.hidden = !none; last.hidden = none;
+      empty.hidden = !none; last.hidden = none || !!zoom;
       if (none) { line.setAttribute('d', ''); area.setAttribute('d', ''); axis.innerHTML = ''; geo = []; return null; }
       if (pts.length > PLOT_N) {
         const b = Math.ceil(pts.length / PLOT_N), o = [];
@@ -670,7 +726,7 @@ function makeChart(root, axis) {
       let mn = Infinity, mx = -Infinity;
       for (const p of pts) { mn = Math.min(mn, p[1]); mx = Math.max(mx, p[1]); }
       const pad = (mx - mn) * .18 || Math.max(Math.abs(mx) * .01, .5), lo = mn - pad, hi = mx + pad;
-      const t0 = pts[0][0], t1 = pts[pts.length - 1][0], span = t1 - t0 || 1;
+      const t0 = zoom ? zoom[0] : pts[0][0], t1 = zoom ? zoom[1] : pts[pts.length - 1][0], span = t1 - t0 || 1;
       const X = t => (t - t0) / span * W, Y = v => H - (v - lo) / (hi - lo) * H;
       const gap = Math.max(6e5, 5 * period);
 
@@ -702,6 +758,7 @@ function makeChart(root, axis) {
       return { mn, mx, last };
     },
   };
+  return api;
 }
 const chartS = makeChart($('plot-sh'), $('axis-sh'));
 
@@ -863,6 +920,7 @@ function fillSheet(k) {
 }
 function openSheet(k, from) {
   sheetKey = k; sheetFrom = from;
+  chartS.reset();
   fillSheet(k);
   sheet.showModal();
   if (reduce) return;
@@ -1046,6 +1104,9 @@ function tcolor(t) {
 }
 
 let rows = [], period = 3e5, sel = 't', geo = [], got = false;
+let zoom = null;                      /* [t0, t1] do trecho ampliado; null = 7 dias até agora */
+const ZOOM_MIN = HOUR;
+const view = () => zoom || [Date.now() - SPAN, Date.now()];
 
 /* Chuva: mm do pluviômetro quando existe; senão minutos com chuva no FC-22 */
 const gaugeOn = () => rows.some(r => has(r.mm));
@@ -1069,24 +1130,34 @@ $('wk-chips').addEventListener('click', e => {
 
 /* ---------- gráfico ---------- */
 function draw(fade) {
-  const m = M[sel], now = Date.now(), t0 = now - SPAN, X = ts => (ts - t0) / SPAN * W;
+  const m = M[sel], now = Date.now(), [t0, t1] = view(), span = t1 - t0, X = ts => (ts - t0) / span * W;
   $('wk-th').innerHTML = `<i class="ph-light ph-${m.ic}"></i>${m.name}`;
 
   /* meia-noite local separa os dias; rótulo no centro da parte visível de cada dia */
   let sep = '', ax = '';
-  for (let k = dayKey(t0); k <= dayKey(now); k++) {
-    const a = Math.max(dayStart(k), t0), b = Math.min(dayStart(k + 1), now);
-    if (dayStart(k) > t0) sep += `<line class="dsep" x1="${X(dayStart(k)).toFixed(1)}" x2="${X(dayStart(k)).toFixed(1)}" y1="0" y2="${H}"/>`;
-    if (b - a >= 6 * HOUR) ax += `<span style="left:${(X((a + b) / 2) / 10).toFixed(2)}%">${k === dayKey(now) ? 'Hoje' : weekday(a + 1)}</span>`;
+  const lbl = (t, txt) => `<span style="left:${(X(t) / 10).toFixed(2)}%">${txt}</span>`;
+  for (let k = dayKey(t0); k <= dayKey(t1); k++) {
+    const a = Math.max(dayStart(k), t0), b = Math.min(dayStart(k + 1), t1);
+    if (dayStart(k) > t0 && dayStart(k) < t1) sep += `<line class="dsep" x1="${X(dayStart(k)).toFixed(1)}" x2="${X(dayStart(k)).toFixed(1)}" y1="0" y2="${H}"/>`;
+    if (span > 2 * DAY && b - a >= 6 * HOUR) ax += lbl((a + b) / 2, k === dayKey(now) ? 'Hoje' : weekday(a + 1));
+  }
+  /* Ampliado em até 2 dias: marcas de hora (meia-noite mostra o dia) */
+  if (span <= 2 * DAY) {
+    const step = span <= 6 * HOUR ? HOUR : span <= DAY ? 3 * HOUR : 6 * HOUR;
+    for (let t = Math.ceil((t0 + TZ_MS) / step) * step - TZ_MS; t < t1; t += step) {
+      const f = (t - t0) / span, h = Math.round(((t + TZ_MS) % DAY + DAY) % DAY / HOUR);
+      if (f > .03 && f < .97) ax += lbl(t, h === 0 ? weekday(t + 1) : `${h}h`);
+    }
   }
   $('wk-axis').innerHTML = ax;
+  $('wk-zoom').hidden = !zoom;
 
   let body = '', range = '', pts = [];
   if (m.bars) {
     const byHour = new Map();
     for (const r of rows) {
       const v = rainOf(r);
-      if (!has(v) || r.ts < t0) continue;
+      if (!has(v) || r.ts < t0 - HOUR || r.ts > t1) continue;
       const hk = Math.floor(r.ts / HOUR) * HOUR;
       byHour.set(hk, (byHour.get(hk) || 0) + v);
     }
@@ -1102,7 +1173,7 @@ function draw(fade) {
     }
     range = byHour.size ? (mm ? `Total ${fmt(tot, 1)} mm` : `${dur(tot)} com chuva`) : '';
   } else {
-    const s = rows.filter(r => has(r[sel]) && r.ts >= t0).map(r => [r.ts, r[sel]]);
+    const s = rows.filter(r => has(r[sel]) && r.ts >= t0 && r.ts <= t1).map(r => [r.ts, r[sel]]);
     if (s.length > 1) {
       let mn = Infinity, mx = -Infinity;
       for (const [, v] of s) { mn = Math.min(mn, v); mx = Math.max(mx, v); }
@@ -1138,8 +1209,8 @@ function draw(fade) {
   $('wk-range').textContent = range;
   $('wk-plot').innerHTML =
     `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">${sep}${body}</svg>
-     <div class="cross"><span class="pt"></span><span class="tip"></span></div>
-     <p class="empty"${empty ? '' : ' hidden'}>Sem dados desta grandeza na semana.</p>`;
+     <div class="cross"><span class="pt"></span><span class="tip"></span></div><div class="brush" hidden></div>
+     <p class="empty"${empty ? '' : ' hidden'}>${zoom ? 'Sem dados desta grandeza neste trecho.' : 'Sem dados desta grandeza na semana.'}</p>`;
   if (fade && !reduce) $('wk-plot').querySelector('svg').animate([{ opacity: 0 }, { opacity: 1 }], { duration: 220, easing: 'cubic-bezier(.23,1,.32,1)' });
 }
 
@@ -1159,6 +1230,50 @@ plot.addEventListener('pointermove', e => {
   cross.classList.add('on');
 });
 plot.addEventListener('pointerleave', () => { const c = plot.querySelector('.cross'); if (c) c.classList.remove('on'); });
+
+/* ---------- zoom: arrastar seleciona o trecho, duplo clique ou o botão voltam aos 7 dias,
+   Ctrl + roda (ou pinça no trackpad) amplia em torno do cursor ---------- */
+let drag = null;
+function setZoom(a, b) {
+  const lo = Date.now() - SPAN, hi = Date.now();
+  let s = Math.min(SPAN, Math.max(ZOOM_MIN, b - a));
+  a = Math.min(Math.max(a, lo), hi - s);
+  zoom = s >= SPAN ? null : [a, a + s];
+  draw(false);
+}
+plot.addEventListener('pointerdown', e => {
+  if (!geo.length || e.button > 0) return;
+  const r = plot.getBoundingClientRect();
+  drag = { x0: e.clientX - r.left, x1: e.clientX - r.left, w: r.width };
+  plot.setPointerCapture(e.pointerId);
+});
+plot.addEventListener('pointermove', e => {
+  if (!drag) return;
+  const r = plot.getBoundingClientRect(), b = plot.querySelector('.brush');
+  drag.x1 = Math.min(Math.max(e.clientX - r.left, 0), r.width);
+  const a = Math.min(drag.x0, drag.x1), w = Math.abs(drag.x1 - drag.x0);
+  if (b && w > 4) { b.style.left = a + 'px'; b.style.width = w + 'px'; b.hidden = false; }
+});
+const endDrag = apply => {
+  if (!drag) return;
+  const d = drag, b = plot.querySelector('.brush');
+  drag = null;
+  if (b) b.hidden = true;
+  if (!apply || Math.abs(d.x1 - d.x0) < 8) return;
+  const [v0, v1] = view(), f0 = Math.min(d.x0, d.x1) / d.w, f1 = Math.max(d.x0, d.x1) / d.w;
+  setZoom(v0 + f0 * (v1 - v0), v0 + f1 * (v1 - v0));
+};
+plot.addEventListener('pointerup', () => endDrag(true));
+plot.addEventListener('pointercancel', () => endDrag(false));
+plot.addEventListener('dblclick', () => { if (zoom) { zoom = null; draw(true); } });
+plot.addEventListener('wheel', e => {
+  if (!e.ctrlKey || !geo.length) return;
+  e.preventDefault();
+  const r = plot.getBoundingClientRect(), f = (e.clientX - r.left) / r.width, [a, b] = view();
+  const c = a + f * (b - a), s = (b - a) * Math.exp(e.deltaY * .01);
+  setZoom(c - f * s, c - f * s + s);
+}, { passive: false });
+$('wk-zoom').addEventListener('click', () => { zoom = null; draw(true); });
 
 /* ---------- resumo por dia ---------- */
 function days() {
