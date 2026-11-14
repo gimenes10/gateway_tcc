@@ -715,20 +715,27 @@ function makeChart(root, axis) {
       const none = pts.length < 2;
       empty.hidden = !none; last.hidden = none || !!zoom;
       if (none) { line.setAttribute('d', ''); area.setAttribute('d', ''); axis.innerHTML = ''; geo = []; return null; }
+      /* Redução por tempo, não por contagem: o histórico mistura leituras de 1 min (ao vivo)
+         com médias de 5 min (snapshot do gateway). Agrupar por contagem espaçava os pontos de
+         5 min em 15 min ou mais, acima do limite de lacuna, e aquele trecho não era desenhado. */
+      let gap = Math.max(6e5, 5 * period);
       if (pts.length > PLOT_N) {
-        const b = Math.ceil(pts.length / PLOT_N), o = [];
-        for (let j = 0; j < pts.length; j += b) {
-          const s = pts.slice(j, j + b);
-          o.push([s[s.length - 1][0], s.reduce((a, p) => a + p[1], 0) / s.length]);
+        const ta = pts[0][0], bw = (pts[pts.length - 1][0] - ta) / PLOT_N || 1, o = [];
+        let kb = -1, sum = 0, n = 0, tl = 0;
+        for (const p of pts) {
+          const kp = Math.floor((p[0] - ta) / bw);
+          if (kp !== kb && n) { o.push([tl, sum / n]); sum = 0; n = 0; }
+          kb = kp; sum += p[1]; n++; tl = p[0];
         }
+        if (n) o.push([tl, sum / n]);
         pts = o;
+        gap = Math.max(gap, 2.5 * bw);
       }
       let mn = Infinity, mx = -Infinity;
       for (const p of pts) { mn = Math.min(mn, p[1]); mx = Math.max(mx, p[1]); }
       const pad = (mx - mn) * .18 || Math.max(Math.abs(mx) * .01, .5), lo = mn - pad, hi = mx + pad;
       const t0 = zoom ? zoom[0] : pts[0][0], t1 = zoom ? zoom[1] : pts[pts.length - 1][0], span = t1 - t0 || 1;
       const X = t => (t - t0) / span * W, Y = v => H - (v - lo) / (hi - lo) * H;
-      const gap = Math.max(6e5, 5 * period);
 
       let dl = '', da = '', seg = [];
       const flush = () => {
