@@ -256,6 +256,9 @@ dialog .plot{height:210px;flex:none;margin-top:26px}
 .week{max-width:1180px;margin:64px auto 0;padding:0 28px}
 .wk-hd{display:flex;align-items:center;justify-content:space-between;gap:12px 20px;flex-wrap:wrap;margin-bottom:16px}
 .wk-hd h2{font-size:26px;font-weight:400;letter-spacing:-.025em;padding-left:4px}
+.csv-btn{flex-shrink:0;display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:999px;font:inherit;font-size:13px;color:var(--tx2);background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);cursor:pointer}
+.csv-btn:disabled{opacity:.4;cursor:default}
+@media (hover:hover) and (pointer:fine){.csv-btn:not(:disabled):hover{background:rgba(255,255,255,.12);color:#fff}}
 .chips{display:flex;gap:4px;max-width:100%;padding:4px;border-radius:999px;overflow-x:auto;scrollbar-width:none;
   background:rgba(8,18,36,.34);box-shadow:inset 0 0 0 1px var(--ring)}
 .chips::-webkit-scrollbar{display:none}
@@ -382,6 +385,7 @@ dialog .plot{height:210px;flex:none;margin-top:26px}
   <div class="wk-hd">
     <h2 id="wk-title">Últimos 7 dias</h2>
     <div class="chips" id="wk-chips" role="tablist" aria-label="Grandeza do gráfico"></div>
+    <button class="csv-btn" id="wk-csv" type="button" disabled title="Médias de 5 minutos dos últimos 7 dias"><i class="ph-light ph-download-simple"></i>Exportar CSV</button>
   </div>
   <div class="wk-grid">
     <section class="tile wk-chart" aria-label="Gráfico dos últimos 7 dias">
@@ -1189,11 +1193,34 @@ function days() {
   }).join('');
 }
 
+/* ---------- exportação: médias de 5 min dos 7 dias, separador ; e vírgula decimal (Excel pt-BR) ---------- */
+const fIso = new Intl.DateTimeFormat('sv-SE', { year: 'numeric', month: '2-digit', day: '2-digit',
+  hour: '2-digit', minute: '2-digit', hour12: false, ...SP });
+function exportCsv() {
+  const num = (v, d) => has(v) ? v.toFixed(d).replace('.', ',') : '';
+  const ms  = v => has(v) ? v / 3.6 : null;   /* km/h -> m/s */
+  const head = ['data_hora', 'unix_s', 'temperatura_c', 'umidade_pct', 'pressao_hpa', 'luz_lux', 'gas_kohm',
+                'poeira_ugm3', 'vento_ms', 'rajada_ms', 'chuva_mm', 'fc37_molhado_pct'];
+  const body = rows.map(r => [fIso.format(r.ts), Math.round(r.ts / 1000), num(r.t, 2), num(r.h, 1), num(r.p, 1),
+    num(r.l, 0), num(r.gas, 1), num(r.dust, 0), num(ms(r.w), 1), num(ms(r.gu), 1), num(r.mm, 1),
+    r.rp ?? ''].join(';'));
+  const blob = new Blob(['\ufeff' + head.join(';') + '\n' + body.join('\n') + '\n'], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `estacao-sjc_${fIso.format(rows[0].ts).slice(0, 10)}_a_${fIso.format(rows[rows.length - 1].ts).slice(0, 10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+$('wk-csv').addEventListener('click', () => { if (rows.length) exportCsv(); });
+
 /* ---------- entrada ---------- */
 document.addEventListener('estacao:hist', e => {
   const h = decode(e.detail);
   if (!h) return;
   rows = h.rows; period = h.period;
+  $('wk-csv').disabled = !rows.length;
   const first = !got; got = true;
   chips(); draw(first); days();
   /* repassa para o painel principal completar as últimas 24 h */
