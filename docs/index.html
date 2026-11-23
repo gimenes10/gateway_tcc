@@ -196,13 +196,6 @@ button.tile:active,.gas:active{transform:scale(.98)}
 .rs-bars rect{fill:#6fa8f0}
 .rs-bars rect.z{fill:rgba(255,255,255,.08)}
 .rs-ax{display:flex;justify-content:space-between;margin-top:6px;font-size:12px;color:var(--tx3)}
-.rs-ev{list-style:none;margin:0;padding:0;max-height:240px;overflow:auto}
-.rs-ev li{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:baseline;padding:10px 0;font-size:14.5px}
-.rs-ev li+li{box-shadow:inset 0 1px rgba(255,255,255,.08)}
-.rs-ev .d{color:var(--tx2);font-size:13px;white-space:nowrap}
-.rs-ev .mm{color:#9cc8ff;white-space:nowrap}
-.rs-ev .now{color:#9cc8ff}
-.rs-ev .rs-empty{display:block;color:var(--tx3);font-size:14px}
 .drip i{position:absolute;top:-20px;width:1px;height:16px;background:linear-gradient(transparent,rgba(170,205,255,.7));
   animation:dripfall var(--d) linear infinite;animation-delay:var(--w)}
 @keyframes dripfall{to{transform:translateY(240px)}}
@@ -346,7 +339,7 @@ dialog .plot{height:210px;flex:none;margin-top:26px}
     <span class="hint"><i class="ph-light ph-chart-line"></i>Últimas 24 h</span>
   </button>
 
-  <button class="tile c3 c-rain enter" style="--i:2" id="rain-tile" type="button" aria-label="Chuva; abrir pluviômetro e eventos de chuva">
+  <button class="tile c3 c-rain enter" style="--i:2" id="rain-tile" type="button" aria-label="Chuva; abrir o pluviômetro">
     <span class="drip" id="drip"></span>
     <span class="th"><i class="ph-light ph-umbrella-simple"></i>Chuva<i class="ph-light ph-arrow-up-right more"></i></span>
     <span class="rain-body"><i class="ph-light ph-cloud rain-ic" id="rain-ic"></i><span class="rain-txt"><span class="rain-st" id="rain-st">--</span><span class="rain-mm" id="rain-mm"></span></span></span>
@@ -448,9 +441,6 @@ dialog .plot{height:210px;flex:none;margin-top:26px}
     <div><dt>24 h</dt><dd id="rs-24h">--</dd></div>
     <div><dt>7 dias</dt><dd id="rs-7d">--</dd></div>
   </dl>
-  <h3 class="rs-h">Eventos de chuva nos últimos 7 dias</h3>
-  <ul class="rs-ev" id="rs-ev"></ul>
-  <p class="sh-note">Início e fim pelo sensor de gotas (FC-37), em intervalos de 5 min. O volume de cada evento vem do pluviômetro (0,25 mm por basculada).</p>
 </dialog>
 
 <script>
@@ -985,28 +975,11 @@ sheet.addEventListener('cancel', e => { e.preventDefault(); closeSheet(); });
 sheet.addEventListener('click', e => { if (e.target === sheet) closeSheet(); });
 sheet.addEventListener('close', () => sheetFrom && sheetFrom.focus());
 
-/* ---------- chuva: pluviômetro (mm) e eventos do FC-37, pelas médias de 5 min do gateway ---------- */
-let snap = [], snapStep = 3e5;
+/* ---------- chuva: pluviômetro (mm), pelas médias de 5 min do gateway ---------- */
+let snap = [];
 const rs = $('rsheet');
-const fDay = new Intl.DateTimeFormat('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit', timeZone: 'America/Sao_Paulo' });
 const gaugeSeen = () => snap.some(r => has(r.mm));
 const mmSince = t => snap.reduce((s, r) => s + (r.ts >= t && has(r.mm) ? r.mm : 0), 0);
-const durTxt = ms => { const m = Math.round(ms / 6e4); return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h${m % 60 ? ' ' + (m % 60) + ' min' : ''}`; };
-/* Evento = intervalos com o FC-37 molhado, unindo pausas de até 15 min; o volume soma o
-   pluviômetro do início até 15 min depois do fim (a báscula ainda escoa) */
-function rainEvents() {
-  const gap = 3 * snapStep, ev = [];
-  let cur = null;
-  for (const r of snap) {
-    if (!has(r.rp) || r.rp <= 0) continue;
-    if (cur && r.ts - cur.b > gap) { ev.push(cur); cur = null; }
-    if (!cur) cur = { a: r.ts, b: r.ts };
-    cur.b = r.ts + snapStep;
-  }
-  if (cur) ev.push(cur);
-  for (const e of ev) e.mm = snap.reduce((s, r) => s + (has(r.mm) && r.ts >= e.a && r.ts < e.b + gap ? r.mm : 0), 0);
-  return ev;
-}
 function rainMm() {
   $('rain-mm').textContent = gaugeSeen() ? `${fmt(mmSince(Date.now() - DAY), 1)} mm em 24 h` : '';
 }
@@ -1022,13 +995,6 @@ function fillRain() {
   $('rs-1h').textContent = mm(now - 36e5);
   $('rs-24h').textContent = mm(t0);
   $('rs-7d').textContent = mm(0);
-  const raining = !!lastPkt && lastPkt.chuva_status === 1, ev = rainEvents().reverse();
-  $('rs-ev').innerHTML = ev.length ? ev.map((e, i) => {
-    const open = i === 0 && raining && now - e.b < 3 * snapStep;
-    return `<li><span class="d">${fDay.format(e.a).replace('.', '')}</span>` +
-      `<span>${hhmm(e.a)} → ${open ? '<span class="now">agora</span>' : hhmm(e.b)} · ${durTxt((open ? now : e.b) - e.a)}</span>` +
-      `<span class="mm">${gauge ? fmt(e.mm, 2) + ' mm' : ''}</span></li>`;
-  }).join('') : '<li><span class="rs-empty">Nenhum evento de chuva nos últimos 7 dias.</span></li>';
 }
 function openRain() {
   fillRain();
@@ -1101,7 +1067,7 @@ if (hist.length) showLast(); else { hero(null, Date.now()); sunArc(Date.now()); 
    tem leitura própria; as leituras ao vivo, mais finas, têm prioridade. */
 document.addEventListener('estacao:hist-rows', e => {
   const { rows, period: step } = e.detail, lim = Date.now() - DAY, add = [];
-  snap = rows; snapStep = step;
+  snap = rows;
   rainMm();
   if (rs.open) fillRain();
   const ts = hist.map(r => r[0]);
