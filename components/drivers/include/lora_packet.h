@@ -29,8 +29,9 @@
 #define LORA_VALID_GAUGE    (1U << 6)   /* Pluviômetro: rain_x100 */
 
 /* Bits de `flags` */
-#define LORA_FLAG_RAIN_WET  (1U << 0)   /* FC-22 abaixo do limiar */
-#define LORA_FLAG_DUST_SAT  (1U << 1)   /* GP2Y saturado: dust_ugm3 = 500, valor real maior */
+#define LORA_FLAG_RAIN_WET   (1U << 0)   /* FC-22: chovendo, qualquer intensidade */
+#define LORA_FLAG_DUST_SAT   (1U << 1)   /* GP2Y saturado: dust_ugm3 = 500, valor real maior */
+#define LORA_FLAG_RAIN_LIGHT (1U << 2)   /* FC-22: chuva fraca ou intermitente (vem junto com RAIN_WET) */
 
 typedef struct __attribute__((packed)) {
     uint8_t  magic[2];

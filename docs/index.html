@@ -187,6 +187,22 @@ button.tile:active,.gas:active{transform:scale(.98)}
 .no-wind .c-rain .rain-ic{font-size:48px}
 .tile .drip{position:absolute;inset:0;opacity:0;transition:opacity .6s var(--out);pointer-events:none}
 .wet .drip{opacity:1}
+.rain-txt{display:flex;flex-direction:column;min-width:0}
+.rain-mm{margin-top:4px;font-size:13px;color:var(--tx2)}
+.wet .rain-mm{color:#d6e6ff}
+/* diálogo da chuva */
+.rs-h{margin:22px 0 10px;font-size:12.5px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:var(--tx2)}
+.rs-bars{display:block;width:100%;height:96px}
+.rs-bars rect{fill:#6fa8f0}
+.rs-bars rect.z{fill:rgba(255,255,255,.08)}
+.rs-ax{display:flex;justify-content:space-between;margin-top:6px;font-size:12px;color:var(--tx3)}
+.rs-ev{list-style:none;margin:0;padding:0;max-height:240px;overflow:auto}
+.rs-ev li{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:baseline;padding:10px 0;font-size:14.5px}
+.rs-ev li+li{box-shadow:inset 0 1px rgba(255,255,255,.08)}
+.rs-ev .d{color:var(--tx2);font-size:13px;white-space:nowrap}
+.rs-ev .mm{color:#9cc8ff;white-space:nowrap}
+.rs-ev .now{color:#9cc8ff}
+.rs-ev .rs-empty{display:block;color:var(--tx3);font-size:14px}
 .drip i{position:absolute;top:-20px;width:1px;height:16px;background:linear-gradient(transparent,rgba(170,205,255,.7));
   animation:dripfall var(--d) linear infinite;animation-delay:var(--w)}
 @keyframes dripfall{to{transform:translateY(240px)}}
@@ -330,14 +346,14 @@ dialog .plot{height:210px;flex:none;margin-top:26px}
     <span class="hint"><i class="ph-light ph-chart-line"></i>Últimas 24 h</span>
   </button>
 
-  <section class="tile c3 c-rain enter" style="--i:2" id="rain-tile" aria-label="Chuva">
+  <button class="tile c3 c-rain enter" style="--i:2" id="rain-tile" type="button" aria-label="Chuva; abrir pluviômetro e eventos de chuva">
     <span class="drip" id="drip"></span>
-    <span class="th"><i class="ph-light ph-umbrella-simple"></i>Chuva</span>
-    <span class="rain-body"><i class="ph-light ph-cloud rain-ic" id="rain-ic"></i><span class="rain-st" id="rain-st">--</span></span>
+    <span class="th"><i class="ph-light ph-umbrella-simple"></i>Chuva<i class="ph-light ph-arrow-up-right more"></i></span>
+    <span class="rain-body"><i class="ph-light ph-cloud rain-ic" id="rain-ic"></i><span class="rain-txt"><span class="rain-st" id="rain-st">--</span><span class="rain-mm" id="rain-mm"></span></span></span>
     <span class="foot" id="f-r"></span>
     <span class="strip" id="strip" title="Períodos com chuva nas últimas 24 h"></span>
     <span class="strip-ax"><span>−24 h</span><span>agora</span></span>
-  </section>
+  </button>
 
   <button class="tile c3 enter" style="--i:3" data-k="h">
     <span class="th"><i class="ph-light ph-drop"></i>Umidade<i class="ph-light ph-arrow-up-right more"></i></span>
@@ -420,6 +436,21 @@ dialog .plot{height:210px;flex:none;margin-top:26px}
     <div><dt>Média 24 h</dt><dd id="st-avg">--</dd></div>
     <div><dt>Máxima 24 h</dt><dd id="st-max">--</dd></div>
   </dl>
+</dialog>
+
+<dialog id="rsheet" aria-labelledby="rs-title">
+  <div class="sh-hd"><span class="th" id="rs-title"><i class="ph-light ph-cloud-rain"></i>Chuva</span><button class="sh-x" id="rs-x" aria-label="Fechar"><i class="ph-light ph-x"></i></button></div>
+  <h3 class="rs-h">Pluviômetro, mm por hora nas últimas 24 h</h3>
+  <svg class="rs-bars" id="rs-bars" viewBox="0 0 240 96" preserveAspectRatio="none" role="img" aria-label="Chuva por hora nas últimas 24 horas"></svg>
+  <div class="rs-ax"><span>−24 h</span><span>−12 h</span><span>agora</span></div>
+  <dl class="stats">
+    <div><dt>Última hora</dt><dd id="rs-1h">--</dd></div>
+    <div><dt>24 h</dt><dd id="rs-24h">--</dd></div>
+    <div><dt>7 dias</dt><dd id="rs-7d">--</dd></div>
+  </dl>
+  <h3 class="rs-h">Eventos de chuva nos últimos 7 dias</h3>
+  <ul class="rs-ev" id="rs-ev"></ul>
+  <p class="sh-note">Início e fim pelo sensor de gotas (FC-37), em intervalos de 5 min. O volume de cada evento vem do pluviômetro (0,25 mm por basculada).</p>
 </dialog>
 
 <script>
@@ -827,10 +858,12 @@ function air(k, v, sat) {
   box.querySelector('.mk').style.setProperty('--p', (airPos(k, v) * 100).toFixed(1) + '%');
 }
 function rain(v) {
+  rainMm();
   const tile = $('rain-tile'), raining = v === 1, c = COL('r');
   tile.classList.toggle('wet', raining);
   $('rain-ic').className = 'ph-light rain-ic ' + (raining ? 'ph-cloud-rain' : 'ph-cloud');
-  $('rain-st').textContent = !has(v) ? '--' : raining ? 'Chovendo' : 'Sem chuva';
+  $('rain-st').textContent = !has(v) ? '--' : !raining ? 'Sem chuva'
+    : lastPkt && lastPkt.chuva_fraca === 1 ? 'Chuva fraca' : 'Chovendo';
   const rows = hist.filter(r => has(r[c]));
   strip(rows, c);
   if (!rows.length) { $('f-r').textContent = ''; return; }
@@ -952,6 +985,76 @@ sheet.addEventListener('cancel', e => { e.preventDefault(); closeSheet(); });
 sheet.addEventListener('click', e => { if (e.target === sheet) closeSheet(); });
 sheet.addEventListener('close', () => sheetFrom && sheetFrom.focus());
 
+/* ---------- chuva: pluviômetro (mm) e eventos do FC-37, pelas médias de 5 min do gateway ---------- */
+let snap = [], snapStep = 3e5;
+const rs = $('rsheet');
+const fDay = new Intl.DateTimeFormat('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit', timeZone: 'America/Sao_Paulo' });
+const gaugeSeen = () => snap.some(r => has(r.mm));
+const mmSince = t => snap.reduce((s, r) => s + (r.ts >= t && has(r.mm) ? r.mm : 0), 0);
+const durTxt = ms => { const m = Math.round(ms / 6e4); return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h${m % 60 ? ' ' + (m % 60) + ' min' : ''}`; };
+/* Evento = intervalos com o FC-37 molhado, unindo pausas de até 15 min; o volume soma o
+   pluviômetro do início até 15 min depois do fim (a báscula ainda escoa) */
+function rainEvents() {
+  const gap = 3 * snapStep, ev = [];
+  let cur = null;
+  for (const r of snap) {
+    if (!has(r.rp) || r.rp <= 0) continue;
+    if (cur && r.ts - cur.b > gap) { ev.push(cur); cur = null; }
+    if (!cur) cur = { a: r.ts, b: r.ts };
+    cur.b = r.ts + snapStep;
+  }
+  if (cur) ev.push(cur);
+  for (const e of ev) e.mm = snap.reduce((s, r) => s + (has(r.mm) && r.ts >= e.a && r.ts < e.b + gap ? r.mm : 0), 0);
+  return ev;
+}
+function rainMm() {
+  $('rain-mm').textContent = gaugeSeen() ? `${fmt(mmSince(Date.now() - DAY), 1)} mm em 24 h` : '';
+}
+function fillRain() {
+  const now = Date.now(), gauge = gaugeSeen(), t0 = now - DAY, bins = new Array(24).fill(0);
+  for (const r of snap) if (has(r.mm) && r.ts >= t0) bins[Math.min(23, Math.floor((r.ts - t0) / 36e5))] += r.mm;
+  const mx = Math.max(1, ...bins);
+  $('rs-bars').innerHTML = bins.map((v, i) => {
+    const h = v > 0 ? Math.max(3, v / mx * 92) : 2;
+    return `<rect class="${v > 0 ? '' : 'z'}" x="${i * 10 + 1}" y="${(96 - h).toFixed(1)}" width="8" height="${h.toFixed(1)}" rx="2"><title>${hhmm(t0 + i * 36e5)}: ${fmt(v, 2)} mm</title></rect>`;
+  }).join('');
+  const mm = t => gauge ? `${fmt(mmSince(t), 1)} mm` : '--';
+  $('rs-1h').textContent = mm(now - 36e5);
+  $('rs-24h').textContent = mm(t0);
+  $('rs-7d').textContent = mm(0);
+  const raining = !!lastPkt && lastPkt.chuva_status === 1, ev = rainEvents().reverse();
+  $('rs-ev').innerHTML = ev.length ? ev.map((e, i) => {
+    const open = i === 0 && raining && now - e.b < 3 * snapStep;
+    return `<li><span class="d">${fDay.format(e.a).replace('.', '')}</span>` +
+      `<span>${hhmm(e.a)} → ${open ? '<span class="now">agora</span>' : hhmm(e.b)} · ${durTxt((open ? now : e.b) - e.a)}</span>` +
+      `<span class="mm">${gauge ? fmt(e.mm, 2) + ' mm' : ''}</span></li>`;
+  }).join('') : '<li><span class="rs-empty">Nenhum evento de chuva nos últimos 7 dias.</span></li>';
+}
+function openRain() {
+  fillRain();
+  rs.showModal();
+  if (reduce) return;
+  const a = $('rain-tile').getBoundingClientRect(), b = rs.getBoundingClientRect();
+  const dx = a.left + a.width / 2 - (b.left + b.width / 2), dy = a.top + a.height / 2 - (b.top + b.height / 2);
+  rs.animate([
+    { transform: `translate(${dx}px,${dy}px) scale(${Math.max(.3, a.width / b.width).toFixed(3)})`, opacity: 0 },
+    { transform: 'none', opacity: 1 },
+  ], { duration: 420, easing: 'cubic-bezier(.32,.72,0,1)' });
+}
+function closeRain() {
+  if (!rs.open) return;
+  if (reduce) { rs.close(); return; }
+  rs.classList.add('closing');
+  const anim = rs.animate([{ transform: 'none', opacity: 1 }, { transform: 'scale(.96) translateY(8px)', opacity: 0 }],
+    { duration: 200, easing: 'cubic-bezier(.23,1,.32,1)' });
+  anim.onfinish = () => { rs.close(); rs.classList.remove('closing'); };
+}
+$('rain-tile').addEventListener('click', openRain);
+$('rs-x').addEventListener('click', closeRain);
+rs.addEventListener('cancel', e => { e.preventDefault(); closeRain(); });
+rs.addEventListener('click', e => { if (e.target === rs) closeRain(); });
+rs.addEventListener('close', () => $('rain-tile').focus());
+
 /* ---------- conexão ---------- */
 function setConn(s, t) { $('dot').dataset.s = s; $('conn').textContent = t; }
 const staleMs = () => Math.max(12e4, 3 * period);
@@ -998,6 +1101,9 @@ if (hist.length) showLast(); else { hero(null, Date.now()); sunArc(Date.now()); 
    tem leitura própria; as leituras ao vivo, mais finas, têm prioridade. */
 document.addEventListener('estacao:hist-rows', e => {
   const { rows, period: step } = e.detail, lim = Date.now() - DAY, add = [];
+  snap = rows; snapStep = step;
+  rainMm();
+  if (rs.open) fillRain();
   const ts = hist.map(r => r[0]);
   const covered = (a, b) => {   /* há leitura local em [a, b)? busca binária em ts ordenado */
     let lo = 0, hi = ts.length;

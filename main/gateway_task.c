@@ -150,7 +150,8 @@ static void log_packet(const lora_packet_t *p, int8_t rssi, int8_t snr)
              fmt_val(c, sizeof(c), dust, "%.0f", p->dust_vo_mv));
     ESP_LOGI(TAG, "Chuva   | FC-22 %s mV %s | pluvio %s mm",
              fmt_val(a, sizeof(a), rain, "%.0f", p->rain_mv),
-             rain ? ((p->flags & LORA_FLAG_RAIN_WET) ? "MOLHADO" : "SECO") : "--",
+             rain ? ((p->flags & LORA_FLAG_RAIN_LIGHT) ? "CHUVA FRACA"
+                   : (p->flags & LORA_FLAG_RAIN_WET)   ? "MOLHADO" : "SECO") : "--",
              fmt_val(b, sizeof(b), gaug, "%.2f", p->rain_x100 / 100.0));
     ESP_LOGI(TAG, "Vento   | media %s m/s | rajada %s m/s",
              fmt_val(a, sizeof(a), wind, "%.2f", p->wind_cms / 100.0),
