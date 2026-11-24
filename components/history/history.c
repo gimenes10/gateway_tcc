@@ -66,6 +66,7 @@ static uint16_t    s_count;
 
 static acc_t   s_acc;
 static float   s_prev_mm = NAN;  /* último acumulado do pluviômetro visto */
+static double  s_rain_rest;      /* resto abaixo de 0,1 mm, levado ao próximo intervalo */
 static bool    s_dirty;
 
 static SemaphoreHandle_t    s_lock;
@@ -119,6 +120,19 @@ static uint16_t enc_u16(uint16_t n, double sum, double scale)
 
 /* ---------- Agregação ---------- */
 
+/*
+ * Chuva do intervalo em 0,1 mm sem perder o resto. Com 0,25 mm por basculada, arredondar
+ * cada intervalo dava 0,3 mm para uma basculada (+20 %) e 0,8 mm para três. O que não
+ * cabe em 0,1 mm passa para o intervalo seguinte, e a soma fica exata (erro < 0,1 mm).
+ */
+static uint16_t enc_rain(float mm)
+{
+    const double v = mm * 10.0 + s_rain_rest, q = floor(v + 1e-6);
+
+    s_rain_rest = v - q;
+    return (uint16_t)fmin(q, NA_U16 - 1);
+}
+
 static void acc_to_rec(const acc_t *a, hist_rec_t *r)
 {
     r->ts = a->start;
@@ -136,7 +150,7 @@ static void acc_to_rec(const acc_t *a, hist_rec_t *r)
     r->dust_ugm3    = enc_u16(a->n_dust, a->dust,  1.0);
     r->wind_x10     = enc_u16(a->n_wind, a->wind,  10.0);
     r->gust_x10     = a->n_wind ? enc_u16(1, a->gust_max, 10.0) : NA_U16;
-    r->rain_mm_x10  = a->gauge  ? enc_u16(1, a->rain_mm, 10.0)  : NA_U16;
+    r->rain_mm_x10  = a->gauge  ? enc_rain(a->rain_mm)  : NA_U16;
     r->rain_pct     = a->n_rain ? (uint8_t)lround(100.0 * a->n_wet / a->n_rain) : NA_U8;
     r->crc8         = crc8((const uint8_t *)r, sizeof(*r) - 1);
 }

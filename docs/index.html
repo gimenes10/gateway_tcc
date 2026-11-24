@@ -398,7 +398,7 @@ dialog .plot{height:210px;flex:none;margin-top:26px}
   <div class="wk-hd">
     <h2 id="wk-title">Últimos 7 dias</h2>
     <div class="chips" id="wk-chips" role="tablist" aria-label="Grandeza do gráfico"></div>
-    <button class="csv-btn" id="wk-csv" type="button" disabled title="Médias de 5 minutos dos últimos 7 dias"><i class="ph-light ph-download-simple"></i>Exportar CSV</button>
+    <button class="csv-btn" id="wk-csv" type="button" disabled title="Últimos 7 dias, nas mesmas unidades dos cards: leituras de 1 min onde este navegador as recebeu, médias de 5 min do gateway no resto"><i class="ph-light ph-download-simple"></i>Exportar CSV</button>
   </div>
   <div class="wk-grid">
     <section class="tile wk-chart" aria-label="Gráfico dos últimos 7 dias">
@@ -1063,6 +1063,10 @@ function showLast() {
 }
 if (hist.length) showLast(); else { hero(null, Date.now()); sunArc(Date.now()); }
 
+/* Para a exportação (módulo dos 7 dias): só as leituras ao vivo deste navegador. As linhas
+   que o histórico do gateway completou ficam no centro do intervalo de 5 min (ts % 5 min = 2,5 min). */
+window.estacaoLive = () => hist.filter(r => r[0] % 3e5 !== 15e4);
+
 /* Histórico do gateway (resumos de 5 min) preenche as 24 h onde este navegador não
    tem leitura própria; as leituras ao vivo, mais finas, têm prioridade. */
 document.addEventListener('estacao:hist-rows', e => {
@@ -1387,17 +1391,39 @@ function days() {
   }).join('');
 }
 
-/* ---------- exportação: médias de 5 min dos 7 dias, separador ; e vírgula decimal (Excel pt-BR) ---------- */
+/* ---------- exportação: 7 dias, separador ; e vírgula decimal (Excel pt-BR) ---------- */
 const fIso = new Intl.DateTimeFormat('sv-SE', { year: 'numeric', month: '2-digit', day: '2-digit',
   hour: '2-digit', minute: '2-digit', hour12: false, ...SP });
+/*
+ * Mesmos dados e unidades dos cards (vento em km/h, chuva como "chovendo" 0/1):
+ *  - leituras de 1 min onde este navegador as recebeu ao vivo (as mesmas dos cards e das 24 h);
+ *  - médias de 5 min do gateway nos intervalos sem leitura ao vivo.
+ * O pluviômetro só existe por intervalo de 5 min: num intervalo com leituras de 1 min, os mm
+ * vão na última leitura dele, e a soma por dia continua igual à do site.
+ */
 function exportCsv() {
-  const num = (v, d) => has(v) ? v.toFixed(d).replace('.', ',') : '';
-  const ms  = v => has(v) ? v / 3.6 : null;   /* km/h -> m/s */
-  const head = ['data_hora', 'unix_s', 'temperatura_c', 'umidade_pct', 'pressao_hpa', 'luz_lux', 'gas_kohm',
-                'poeira_ugm3', 'vento_ms', 'rajada_ms', 'chuva_mm', 'fc37_molhado_pct'];
-  const body = rows.map(r => [fIso.format(r.ts), Math.round(r.ts / 1000), num(r.t, 2), num(r.h, 1), num(r.p, 1),
-    num(r.l, 0), num(r.gas, 1), num(r.dust, 0), num(ms(r.w), 1), num(ms(r.gu), 1), num(r.mm, 1),
-    r.rp ?? ''].join(';'));
+  const num  = (v, d) => has(v) ? v.toFixed(d).replace('.', ',') : '';
+  const live = (window.estacaoLive ? window.estacaoLive() : []).filter(x => x[0] >= rows[0].ts).sort((a, b) => a[0] - b[0]);
+  const head = ['data_hora', 'unix_s', 'resolucao', 'temperatura_c', 'umidade_pct', 'pressao_hpa', 'luz_lux',
+                'vento_kmh', 'poeira_ugm3', 'gas_kohm', 'chovendo', 'chuva_mm'];
+  const body = [];
+  const add = (ts, res, t, h, p, l, w, dust, gas, rain, mm) => body.push([fIso.format(ts), Math.round(ts / 1000), res,
+    num(t, 2), num(h, 1), num(p, 1), num(l, 0), num(w, 1), num(dust, 0), num(gas, 1), has(rain) ? rain : '', num(mm, 2)].join(';'));
+  /* Linha do histórico local: [ts, t, h, p, l, w(km/h), dust, gas, chovendo] */
+  const addLive = (x, mm) => add(x[0], '1 min', x[1], x[2], x[3], x[4], x[5], x[6], x[7], x[8], mm);
+  let j = 0;
+  for (const r of rows) {
+    const end = r.ts + period;
+    while (j < live.length && live[j][0] < r.ts) addLive(live[j++], null);
+    const first = j;
+    while (j < live.length && live[j][0] < end) j++;
+    if (j > first) {
+      for (let i = first; i < j; i++) addLive(live[i], i === j - 1 ? r.mm : null);
+    } else {
+      add(r.ts, '5 min', r.t, r.h, r.p, r.l, r.w, r.dust, r.gas, has(r.rp) ? (r.rp > 0 ? 1 : 0) : null, r.mm);
+    }
+  }
+  while (j < live.length) addLive(live[j++], null);   /* intervalo ainda aberto no gateway */
   const blob = new Blob(['\ufeff' + head.join(';') + '\n' + body.join('\n') + '\n'], { type: 'text/csv;charset=utf-8' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
